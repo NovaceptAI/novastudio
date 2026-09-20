@@ -1,0 +1,124 @@
+@import '@fontsource-variable/inter';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --canvas: 45 20% 96.1%;
+    --card: 0 0% 100%;
+    --subtle: 43 20% 93.1%;
+    --border: 40 15.3% 88.4%;
+    --border-strong: 40 13.3% 82.4%;
+    --fg: 40 5.7% 10.4%;
+    --muted-fg: 37 6.2% 41%;
+
+    --sidebar: 40 4.9% 12%;
+    --sidebar-hover: 45 4.8% 16.5%;
+    --sidebar-active: 40 8.7% 20.2%;
+    --sidebar-fg: 40 9.9% 82.2%;
+    --sidebar-muted: 39 5.7% 52.2%;
+
+    --primary: 243 75.4% 58.6%;
+    --primary-hover: 245 57.9% 50.6%;
+    --primary-soft: 226 100% 96.7%;
+    --primary-soft-fg: 244 54.5% 41.4%;
+
+    --success: 142 71.8% 29.2%;
+    --success-soft: 145 81% 95.9%;
+    --warning: 26 90.5% 37.1%;
+    --warning-soft: 37 86.7% 94.1%;
+    --danger: 0 73.7% 41.8%;
+    --danger-soft: 0 81% 95.9%;
+    --info: 224 76.3% 48%;
+    --info-soft: 221 100% 96.9%;
+
+    --ring: 239 83.5% 66.7%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-foreground antialiased;
+    font-family: theme('fontFamily.sans');
+    font-feature-settings: 'cv11', 'ss01';
+    font-variation-settings: 'opsz' 32;
+  }
+
+  /* Consistent, visible focus for keyboard users across the app. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-canvas;
+  }
+
+  th {
+    @apply text-left font-medium;
+  }
+
+  /* Numeric columns line up in tables and stat tiles. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  .card-surface {
+    @apply rounded-xl border border-border bg-card shadow-card;
+    /* Cards are nearly always grid or flex children. Their default
+       min-width:auto lets one long unbreakable label stretch the card, and with
+       it the page, wider than the viewport on small screens. */
+    min-width: 0;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-md bg-subtle;
+  }
+
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent;
+    content: '';
+    animation: shimmer 1.6s infinite;
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border-strong)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border-strong;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
