@@ -7,7 +7,10 @@ HOST=novastudio.novaceptai.com
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 EXPECTED="$(curl -s --max-time 5 https://checkip.amazonaws.com)"
-ACTUAL="$(getent hosts "$HOST" | awk '{print $1}' | head -1 || true)"
+# Ask a public resolver, not this server's: Let's Encrypt validates from the
+# internet, and the local (VPC) resolver can hold a stale NXDOMAIN for minutes
+# after the record is added.
+ACTUAL="$(dig +short A "$HOST" @1.1.1.1 | tail -1 || true)"
 if [ "$ACTUAL" != "$EXPECTED" ]; then
   echo "$HOST resolves to '${ACTUAL:-nothing}', expected $EXPECTED. Fix DNS first." >&2
   exit 1
