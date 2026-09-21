@@ -21,6 +21,29 @@ npm run lint
 npm run typecheck
 ```
 
+## Deployment
+
+Served as a static build by nginx at `novastudio.novaceptai.com`, following the
+same pattern as `academy.novaceptai.com`.
+
+```bash
+deploy/deploy.sh          # type-check, build, publish to /var/www/novastudio
+deploy/enable-https.sh    # one-off: issue the certificate and switch to HTTPS
+```
+
+`deploy.sh` builds into a scratch directory and only publishes on success,
+copying hashed chunks before `index.html` so a browser is never handed a page
+that points at files not yet present. Chunks from earlier builds stay for a
+week so open tabs can still lazy-load.
+
+The nginx configs live in `deploy/nginx/`: a bootstrap (HTTP only) used until
+the certificate exists, and the final HTTPS config. `enable-https.sh` refuses to
+run until DNS resolves to this server.
+
+Build output goes to `/static/`, not Vite's default `/assets/`, because
+`/assets` is the Asset Library's route; with the default, reloading that page
+would hit the directory and 404.
+
 ## What it does
 
 | Screen | What it covers |

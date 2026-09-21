@@ -10,6 +10,9 @@ export default defineConfig({
     },
   },
   build: {
+    // Not the default `assets`: that would collide with the Asset Library's
+    // /assets route, so reloading that page would hit the directory instead.
+    assetsDir: 'static',
     rollupOptions: {
       output: {
         // Recharts and React change far less often than app code, so they get
