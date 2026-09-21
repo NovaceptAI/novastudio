@@ -13,7 +13,7 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
 };
 
 /**
- * Licence provenance. Every sample asset carries one so the library models the
+ * Licence provenance. Every asset carries one so the library records the
  * rights metadata a real pipeline has to keep.
  */
 export type LicenceType =
@@ -64,9 +64,6 @@ export interface Asset {
   licence: AssetLicence;
   tags: string[];
   createdOn: IsoDate;
-  /**
-   * Every asset in this phase is a locally rendered stand-in — no file is
-   * fetched from a paid service. The library renders a generated preview.
-   */
+  /** Always true for now: a record of the asset, with no file stored. */
   placeholder: true;
 }

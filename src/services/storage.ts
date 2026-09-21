@@ -6,8 +6,22 @@
  * and a version mismatch is treated as "no saved state" rather than an error.
  */
 
-const STORAGE_KEY = 'novastudio.demo.v1';
+const STORAGE_KEY = 'novastudio.workspace';
 const STORAGE_VERSION = 1;
+
+/**
+ * Where the first build kept its sample data. Removed on load so a browser that
+ * opened that version never shows the invented records again.
+ */
+const LEGACY_KEYS = ['novastudio.demo.v1'];
+
+export function dropLegacyStorage(): void {
+  try {
+    for (const key of LEGACY_KEYS) window.localStorage.removeItem(key);
+  } catch {
+    // Storage unavailable; nothing to clean up.
+  }
+}
 
 interface Envelope<T> {
   version: number;

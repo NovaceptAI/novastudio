@@ -2,7 +2,7 @@ import { Cloud, ExternalLink, Image, Mic, Plug, Video, Youtube } from 'lucide-re
 import { useSnapshot } from '@/store/app-store';
 import { INTEGRATION_CATEGORY_LABELS, type Integration } from '@/types';
 import { Badge, Button } from '@/components/ui';
-import { DemoDataNotice, PageHeader, Section } from '@/components/common';
+import { PageHeader, Section } from '@/components/common';
 
 const ICONS: Record<string, typeof Plug> = {
   int_youtube: Youtube,
@@ -88,11 +88,6 @@ export function IntegrationsPage() {
         description="The external services NovaStudio is designed around. None of them is connected in this phase."
       />
 
-      <DemoDataNotice>
-        No integration is authenticated. Every screen that depends on one shows placeholder data and says
-        so, rather than pretending a connection exists.
-      </DemoDataNotice>
-
       <Section
         title="Why nothing connects yet"
         description="This phase is frontend-only, and that is a deliberate boundary."
@@ -110,7 +105,7 @@ export function IntegrationsPage() {
           </li>
           <li className="flex gap-2">
             <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-primary" />
-            The mock service layer in <code className="rounded bg-subtle px-1">src/services/api.ts</code> is
+            The service layer in <code className="rounded bg-subtle px-1">src/services/api.ts</code> is
             the seam. Each function there maps to an endpoint, so wiring a real backend means changing that
             file and nothing in the screens.
           </li>

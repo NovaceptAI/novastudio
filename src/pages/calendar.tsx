@@ -3,10 +3,9 @@ import { Link } from 'react-router-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useData, useScopedChannelIds, useSnapshot } from '@/store/app-store';
 import { Badge, Button, EmptyState, useToast } from '@/components/ui';
-import { ChannelDot, DemoDataNotice, PageHeader, StageBadge } from '@/components/common';
+import { ChannelDot, PageHeader, StageBadge, Notice } from '@/components/common';
 import { ChartLegend } from '@/components/charts/chart-kit';
 import {
-  DEMO_TODAY,
   addDays,
   addMonths,
   endOfMonth,
@@ -17,6 +16,7 @@ import {
   parseIsoDate,
   startOfMonth,
   startOfWeek,
+  today,
 } from '@/lib/date';
 import { cn } from '@/lib/utils';
 import { scopeProjects } from '@/lib/selectors';
@@ -32,7 +32,7 @@ export function CalendarPage() {
   const scopedIds = useScopedChannelIds();
 
   const [view, setView] = useState<CalendarView>('month');
-  const [cursor, setCursor] = useState<IsoDate>(DEMO_TODAY);
+  const [cursor, setCursor] = useState<IsoDate>(today());
   const [dragged, setDragged] = useState<string | null>(null);
   const [hoverDay, setHoverDay] = useState<IsoDate | null>(null);
 
@@ -131,7 +131,7 @@ export function CalendarPage() {
               <Button variant="secondary" size="icon" onClick={() => step(-1)} aria-label="Previous period">
                 <ChevronLeft />
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setCursor(DEMO_TODAY)}>
+              <Button variant="secondary" size="sm" onClick={() => setCursor(today())}>
                 Today
               </Button>
               <Button variant="secondary" size="icon" onClick={() => step(1)} aria-label="Next period">
@@ -142,9 +142,7 @@ export function CalendarPage() {
         }
       />
 
-      <DemoDataNotice>
-        Moving an entry changes its date in this workspace only. Nothing is rescheduled on YouTube.
-      </DemoDataNotice>
+      <Notice>Dates changed here are NovaStudio's schedule only. Nothing is rescheduled on YouTube.</Notice>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-base font-semibold">{rangeLabel}</h2>
@@ -169,7 +167,7 @@ export function CalendarPage() {
           {days.map((day) => {
             const entries = byDay.get(day) ?? [];
             const outsideMonth = view === 'month' && day.slice(0, 7) !== monthOfCursor;
-            const isToday = day === DEMO_TODAY;
+            const isToday = day === today();
             return (
               <div
                 key={day}

@@ -50,7 +50,7 @@ export interface DateRange {
   to: IsoDate;
 }
 
-/** Result envelope used by the mock service layer, mirroring a REST response. */
+/** Result envelope used by the service layer, mirroring a REST response. */
 export interface Paginated<T> {
   items: T[];
   total: number;

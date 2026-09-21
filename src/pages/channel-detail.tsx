@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   CalendarClock,
+  CheckCircle2,
+  Circle,
   ExternalLink,
   Lightbulb,
   Plus,
   Save,
   Trash2,
   Unlink,
-  Users,
 } from 'lucide-react';
 import { useData, useSnapshot } from '@/store/app-store';
 import {
   AUDIENCE_RATING_LABELS,
   CHANNEL_STATUS_LABELS,
-  CHANNEL_STATUS_TONES,
   LANGUAGE_LABELS,
   SOURCE_TYPE_LABELS,
   VIDEO_FORMAT_LABELS,
@@ -23,6 +23,10 @@ import {
   WEEKDAY_LABELS,
   WEEKDAY_VALUES,
   type ApprovedSource,
+  type ChannelBranding,
+  type ChannelStatus,
+  type VoiceProfile,
+  type VoiceRole,
   type ChannelConfig,
   type LanguageCode,
   type VideoFormat,
@@ -45,38 +49,33 @@ import {
 } from '@/components/ui';
 import {
   ChannelAvatar,
-  DemoDataNotice,
   DetailRow,
   FutureIntegration,
   LanguagePips,
   PageHeader,
   Section,
   StageBadge,
-  StatTile,
 } from '@/components/common';
-import { formatCompactInr, formatCompactNumber, formatCurrency, formatHours, formatPercent } from '@/lib/format';
-import { DEMO_TODAY, addDays, formatFullDate, relativeToToday } from '@/lib/date';
+import { formatCompactInr, formatCurrency } from '@/lib/format';
+import { addDays, formatFullDate, relativeToToday, today } from '@/lib/date';
 import { createId } from '@/lib/utils';
-import { performanceByChannel } from '@/lib/analytics';
 import { committedSpend, inProduction, recentlyPublished, scopeProjects, upcomingReleases } from '@/lib/selectors';
-import { useFilters } from '@/store/app-store';
+import { missingSetup } from '@/data/channels';
 
 export function ChannelDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { channels, projects, ideas, metrics, settings } = useSnapshot();
-  const { range } = useFilters();
+  const { channels, projects, ideas, settings } = useSnapshot();
+  const { updateChannel } = useData();
+  const { notify } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') ?? 'overview';
   const channel = channels.find((item) => item.slug === slug);
 
   const channelProjects = useMemo(
     () => (channel ? scopeProjects(projects, [channel.id]) : []),
     [projects, channel],
   );
-
-  const performance = useMemo(() => {
-    if (!channel) return null;
-    return performanceByChannel(metrics, range, [channel.id], new Set(channel.monetised ? [channel.id] : []))[0];
-  }, [metrics, range, channel]);
 
   if (!channel) {
     return (
@@ -103,12 +102,24 @@ export function ChannelDetailPage() {
 
       <PageHeader
         title={channel.name}
-        description={channel.description}
         actions={
           <div className="flex items-center gap-2">
-            <Badge tone={CHANNEL_STATUS_TONES[channel.status]}>
-              {CHANNEL_STATUS_LABELS[channel.status]}
-            </Badge>
+            <NativeSelect
+              aria-label="Channel status"
+              value={channel.status}
+              className="h-8 w-auto text-xs"
+              onChange={(event) =>
+                void updateChannel(channel.id, { status: event.target.value as ChannelStatus }).then(() =>
+                  notify({ tone: 'success', title: `Status set to ${CHANNEL_STATUS_LABELS[event.target.value as ChannelStatus]}` }),
+                )
+              }
+            >
+              {(Object.keys(CHANNEL_STATUS_LABELS) as ChannelStatus[]).map((value) => (
+                <option key={value} value={value}>
+                  {CHANNEL_STATUS_LABELS[value]}
+                </option>
+              ))}
+            </NativeSelect>
             {channel.audienceRating !== 'general' && (
               <Badge tone={channel.audienceRating === 'mature' ? 'danger' : 'accent'}>
                 {AUDIENCE_RATING_LABELS[channel.audienceRating]}
@@ -118,18 +129,10 @@ export function ChannelDetailPage() {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <ChannelAvatar channel={channel} size="lg" />
-        <div className="text-xs text-muted-foreground">
-          <p className="text-sm font-medium text-foreground">{channel.niche}</p>
-          <p className="mt-0.5 flex items-center gap-1.5">
-            <Users className="size-3.5" aria-hidden />
-            {formatCompactNumber(channel.subscribers)} subscribers · created {formatFullDate(channel.createdOn)}
-          </p>
-        </div>
-      </div>
-
-      <Tabs defaultValue="overview">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setSearchParams(value === 'overview' ? {} : { tab: value }, { replace: true })}
+      >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="ideas">Ideas &amp; schedule</TabsTrigger>
@@ -139,28 +142,10 @@ export function ChannelDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 pt-4">
-          <DemoDataNotice />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatTile
-              label="Views in range"
-              value={formatCompactNumber(performance?.views ?? 0)}
-              changePct={performance?.viewsChangePct}
-            />
-            <StatTile label="Watch time" value={formatHours(performance?.watchTimeHours ?? 0)} />
-            <StatTile
-              label="Thumbnail CTR"
-              value={formatPercent(performance?.thumbnailCtr ?? 0, 2)}
-              footnote={`${formatCompactNumber(performance?.impressions ?? 0)} impressions`}
-            />
-            <StatTile
-              label="Revenue"
-              value={
-                channel.monetised ? formatCurrency(performance?.revenue ?? 0, 'INR') : 'Not monetised'
-              }
-              footnote={channel.monetised ? 'seeded estimate' : 'no monetisation configured'}
-            />
-          </div>
-
+          <SetupChecklist
+            missing={missingSetup(channel)}
+            onOpen={() => setSearchParams({ tab: 'config' }, { replace: true })}
+          />
           <div className="grid gap-4 lg:grid-cols-2">
             <Section
               title="Recent videos"
@@ -285,55 +270,7 @@ export function ChannelDetailPage() {
         </TabsContent>
 
         <TabsContent value="brand" className="space-y-4 pt-4">
-          <Section title="Branding" description="Direction notes. No logo or template files exist in this phase.">
-            <div className="flex items-center gap-3 border-b border-border pb-3">
-              <ChannelAvatar channel={channel} size="lg" />
-              <div className="text-xs">
-                <p className="font-medium text-foreground">Monogram stands in for a logo</p>
-                <p className="mt-0.5 text-muted-foreground">
-                  Accent colour <code className="rounded bg-subtle px-1">{channel.branding.accentColor}</code>{' '}
-                  is used for this channel everywhere in the app.
-                </p>
-              </div>
-            </div>
-            <dl className="mt-3 divide-y divide-border">
-              <DetailRow label="Thumbnail style">{channel.branding.thumbnailStyle}</DetailRow>
-              <DetailRow label="Title typography">{channel.branding.titleTypography}</DetailRow>
-              <DetailRow label="Lower thirds">{channel.branding.lowerThirdStyle}</DetailRow>
-              <DetailRow label="Music direction">{channel.branding.musicDirection}</DetailRow>
-            </dl>
-            <FutureIntegration
-              className="mt-4"
-              label="Logo and template uploads are a future integration"
-              detail="Brand files will live in object storage once AWS is connected."
-            />
-          </Section>
-
-          <Section
-            title="Narrator and character voices"
-            description="Voice slots are configuration only — no provider voice is assigned."
-          >
-            <ul className="divide-y divide-border">
-              {channel.voices.map((voice) => (
-                <li key={voice.id} className="flex flex-wrap items-start gap-3 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{voice.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{voice.characteristics}</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Badge tone="neutral">{VOICE_ROLE_LABELS[voice.role]}</Badge>
-                    <Badge tone="neutral">{LANGUAGE_LABELS[voice.language]}</Badge>
-                    <Badge tone="warning">Placeholder</Badge>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <FutureIntegration
-              className="mt-4"
-              label="Voice assignment needs ElevenLabs"
-              detail="Each slot will map to a provider voice id once the integration exists."
-            />
-          </Section>
+          <BrandingPanel key={channel.id} channelId={channel.id} />
         </TabsContent>
 
         <TabsContent value="connection" className="space-y-4 pt-4">
@@ -360,12 +297,18 @@ export function ChannelDetailPage() {
                 </Badge>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                   No OAuth grant exists, so NovaStudio cannot upload, schedule, or read analytics from
-                  YouTube. Subscriber counts and performance figures shown in this workspace are seeded
-                  demo data, not the real channel's numbers.
+                  YouTube.
                 </p>
                 <dl className="mt-3 divide-y divide-border border-t border-border">
                   <DetailRow label="Intended handle">
-                    <code className="rounded bg-subtle px-1">{channel.youtube.intendedHandle}</code>
+                    <HandleField
+                      key={channel.youtube.intendedHandle}
+                      value={channel.youtube.intendedHandle}
+                      onSave={async (intendedHandle) => {
+                        await updateChannel(channel.id, { youtube: { ...channel.youtube, intendedHandle } });
+                        notify({ tone: 'success', title: 'Handle saved' });
+                      }}
+                    />
                   </DetailRow>
                   <DetailRow label="Last checked">Never</DetailRow>
                 </dl>
@@ -425,7 +368,7 @@ function IdeasPanel({ channelId, ideas }: { channelId: string; ideas: ReturnType
 
   async function promote(ideaId: string) {
     try {
-      const project = await promoteIdea(ideaId, addDays(DEMO_TODAY, 21));
+      const project = await promoteIdea(ideaId, addDays(today(), 21));
       notify({
         tone: 'success',
         title: 'Idea promoted to a project',
@@ -563,14 +506,14 @@ function ConfigPanel({
   function validate(): boolean {
     const next: Record<string, string> = {};
     if (draft.languages.length === 0) next.languages = 'Keep at least one language track.';
-    if (draft.preferredFormats.length === 0) next.preferredFormats = 'Pick at least one format.';
-    if (draft.targetDurationMinutes.min <= 0) next.targetDurationMinutes = 'Minimum must be above zero.';
-    else if (draft.targetDurationMinutes.min >= draft.targetDurationMinutes.max) {
-      next.targetDurationMinutes = 'Minimum must be below the maximum.';
+    const { min, max } = draft.targetDurationMinutes;
+    // 0 / 0 means "not decided yet"; anything else has to be a real range.
+    if ((min !== 0 || max !== 0) && (min <= 0 || min > max)) {
+      next.targetDurationMinutes = 'Enter a minimum above zero and no larger than the maximum.';
     }
     if (draft.cadence.videosPerWeek < 0 || draft.cadence.videosPerWeek > 21) {
       next.cadence = 'Videos per week must be between 0 and 21.';
-    } else if (draft.cadence.publishDays.length === 0) {
+    } else if (draft.cadence.videosPerWeek > 0 && draft.cadence.publishDays.length === 0) {
       next.cadence = 'Pick at least one publishing day.';
     }
     if (draft.monthlyBudget < 0) next.monthlyBudget = 'Budget cannot be negative.';
@@ -595,7 +538,7 @@ function ConfigPanel({
       notify({
         tone: 'success',
         title: 'Channel configuration saved',
-        description: 'Stored locally in this browser. Use Reset demo data in Settings to undo.',
+        description: 'Saved in this browser.',
       });
     } catch (cause) {
       notify({
@@ -823,7 +766,7 @@ function ConfigPanel({
                   url: 'https://',
                   type: 'article',
                   credibility: 'medium',
-                  addedOn: DEMO_TODAY,
+                  addedOn: today(),
                 },
               ])
             }
@@ -921,5 +864,261 @@ function ConfigPanel({
         </div>
       </Section>
     </div>
+  );
+}
+
+/* ---------------------------------------------------------------- setup */
+
+const SETUP_LABELS = [
+  'audience',
+  'tone',
+  'formats',
+  'target duration',
+  'cadence',
+  'budget',
+  'approved sources',
+];
+
+function SetupChecklist({ missing, onOpen }: { missing: string[]; onOpen: () => void }) {
+  const done = SETUP_LABELS.length - missing.length;
+  return (
+    <Section
+      title="Channel setup"
+      description={
+        missing.length === 0
+          ? 'Everything the pipeline needs is set.'
+          : `${done} of ${SETUP_LABELS.length} set. Finish these before producing for this channel.`
+      }
+      actions={
+        missing.length > 0 && (
+          <Button variant="primary" size="sm" onClick={onOpen}>
+            Open configuration
+          </Button>
+        )
+      }
+    >
+      <ul className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        {SETUP_LABELS.map((label) => {
+          const ok = !missing.includes(label);
+          return (
+            <li key={label} className="flex items-center gap-2 text-sm">
+              {ok ? (
+                <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden />
+              ) : (
+                <Circle className="size-4 shrink-0 text-border-strong" aria-hidden />
+              )}
+              <span className={ok ? '' : 'text-muted-foreground'}>
+                {label.charAt(0).toUpperCase() + label.slice(1)}
+              </span>
+              <span className="sr-only">{ok ? 'set' : 'not set'}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
+
+function HandleField({ value, onSave }: { value: string; onSave: (value: string) => Promise<void> }) {
+  const [draft, setDraft] = useState(value);
+  const clean = draft.trim();
+  const valid = clean === '' || /^@[A-Za-z0-9._-]{3,30}$/.test(clean);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        aria-label="Intended YouTube handle"
+        placeholder="@handle"
+        value={draft}
+        aria-invalid={!valid || undefined}
+        onChange={(event) => setDraft(event.target.value)}
+        className="h-8 w-56"
+      />
+      <Button size="sm" variant="secondary" disabled={!valid || clean === value} onClick={() => void onSave(clean)}>
+        Save
+      </Button>
+      {!valid && <span className="text-2xs text-danger">Starts with @, 3–30 letters, digits, . _ or -</span>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------ branding & voices */
+
+const BRANDING_FIELDS: { key: keyof ChannelBranding; label: string; hint: string }[] = [
+  { key: 'thumbnailStyle', label: 'Thumbnail style', hint: 'Composition, text treatment, colour.' },
+  { key: 'titleTypography', label: 'Title typography', hint: 'Typeface, weight, casing.' },
+  { key: 'lowerThirdStyle', label: 'Lower thirds', hint: 'On-screen labels and captions.' },
+  { key: 'musicDirection', label: 'Music direction', hint: 'Mood, instruments, how it sits under speech.' },
+];
+
+function BrandingPanel({ channelId }: { channelId: string }) {
+  const { channels } = useSnapshot();
+  const { updateChannel } = useData();
+  const { notify } = useToast();
+  const channel = channels.find((item) => item.id === channelId)!;
+  const [branding, setBranding] = useState(channel.branding);
+  const [voices, setVoices] = useState<VoiceProfile[]>(channel.voices);
+  const [saving, setSaving] = useState(false);
+
+  const dirty =
+    JSON.stringify(branding) !== JSON.stringify(channel.branding) ||
+    JSON.stringify(voices) !== JSON.stringify(channel.voices);
+  const invalidVoice = voices.some((voice) => !voice.name.trim());
+
+  function updateVoice(id: string, patch: Partial<VoiceProfile>) {
+    setVoices((current) => current.map((voice) => (voice.id === id ? { ...voice, ...patch } : voice)));
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await updateChannel(channelId, { branding, voices });
+      notify({ tone: 'success', title: 'Branding and voices saved' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const saveBar = (
+    <div className="flex items-center gap-2">
+      {dirty && <Badge tone="warning">Unsaved changes</Badge>}
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={!dirty || saving || invalidVoice}
+        onClick={() => void save()}
+      >
+        <Save /> {saving ? 'Saving…' : 'Save'}
+      </Button>
+    </div>
+  );
+
+  return (
+    <>
+      <Section title="Branding" description="Direction notes for thumbnails, titles and sound." actions={saveBar}>
+        <div className="mb-4 flex items-center gap-3">
+          <ChannelAvatar channel={channel} size="lg" />
+          <p className="text-xs text-muted-foreground">
+            The monogram and colour identify this channel across NovaStudio.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {BRANDING_FIELDS.map((field) => (
+            <Field key={field.key} label={field.label} hint={field.hint}>
+              {(props) => (
+                <Textarea
+                  {...props}
+                  rows={2}
+                  value={branding[field.key]}
+                  onChange={(event) => setBranding({ ...branding, [field.key]: event.target.value })}
+                />
+              )}
+            </Field>
+          ))}
+        </div>
+        <FutureIntegration
+          className="mt-4"
+          label="Logo and template uploads are a future integration"
+          detail="Brand files will live in object storage once AWS is connected."
+        />
+      </Section>
+
+      <Section
+        title="Narrator and character voices"
+        description="Voice slots are configuration only — no provider voice is assigned."
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setVoices((current) => [
+                ...current,
+                {
+                  id: createId('vp'),
+                  name: '',
+                  role: 'narrator',
+                  language: channel.config.primaryLanguage,
+                  characteristics: '',
+                  provider: 'unassigned',
+                  providerVoiceId: null,
+                  status: 'placeholder',
+                },
+              ])
+            }
+          >
+            <Plus /> Add voice
+          </Button>
+        }
+      >
+        {voices.length === 0 ? (
+          <EmptyState title="No voices yet" description="Add a narrator, host or character slot." />
+        ) : (
+          <ul className="space-y-3">
+            {voices.map((voice) => (
+              <li key={voice.id} className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_9rem_8rem_auto]">
+                <Field label="Name" required error={!voice.name.trim() ? 'Give the voice a name.' : undefined}>
+                  {(props) => (
+                    <Input {...props} value={voice.name} onChange={(event) => updateVoice(voice.id, { name: event.target.value })} />
+                  )}
+                </Field>
+                <Field label="Role">
+                  {(props) => (
+                    <NativeSelect
+                      {...props}
+                      value={voice.role}
+                      onChange={(event) => updateVoice(voice.id, { role: event.target.value as VoiceRole })}
+                    >
+                      {(Object.keys(VOICE_ROLE_LABELS) as VoiceRole[]).map((role) => (
+                        <option key={role} value={role}>
+                          {VOICE_ROLE_LABELS[role]}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  )}
+                </Field>
+                <Field label="Language">
+                  {(props) => (
+                    <NativeSelect
+                      {...props}
+                      value={voice.language}
+                      onChange={(event) => updateVoice(voice.id, { language: event.target.value as LanguageCode })}
+                    >
+                      {(['en', 'hi'] as LanguageCode[]).map((language) => (
+                        <option key={language} value={language}>
+                          {LANGUAGE_LABELS[language]}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  )}
+                </Field>
+                <div className="flex items-end">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove ${voice.name || 'voice'}`}
+                    onClick={() => setVoices((current) => current.filter((item) => item.id !== voice.id))}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+                <Field label="Delivery" hint="How it should sound." className="sm:col-span-4">
+                  {(props) => (
+                    <Input
+                      {...props}
+                      value={voice.characteristics}
+                      onChange={(event) => updateVoice(voice.id, { characteristics: event.target.value })}
+                    />
+                  )}
+                </Field>
+              </li>
+            ))}
+          </ul>
+        )}
+        <FutureIntegration
+          className="mt-4"
+          label="Voice assignment needs ElevenLabs"
+          detail="Each slot will map to a provider voice id once the integration exists."
+        />
+      </Section>
+    </>
   );
 }

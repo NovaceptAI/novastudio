@@ -1,6 +1,6 @@
 import type { IsoDate } from './common';
 
-/** One channel's numbers for one day. Seeded to stay internally consistent. */
+/** One channel's numbers for one day, as YouTube Analytics will report them. */
 export interface DailyChannelMetrics {
   date: IsoDate;
   channelId: string;

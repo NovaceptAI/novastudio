@@ -35,7 +35,7 @@ export const INTEGRATIONS: Integration[] = [
     category: 'infrastructure',
     status: 'not_connected',
     purpose:
-      'Hold every master asset and render the final cuts. The Asset Library would read from this rather than from seeded placeholders.',
+      'Hold every master asset and render the final cuts. The Asset Library would hold real files here instead of records only.',
     capabilities: [
       'Object storage for scripts, stills, voice tracks and masters',
       'Transcoding and caption burn-in per language track',

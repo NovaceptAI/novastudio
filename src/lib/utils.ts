@@ -40,29 +40,6 @@ export function percentChange(current: number, previous: number): number {
   return ((current - previous) / previous) * 100;
 }
 
-/**
- * Deterministic 0–1 pseudo-random generator. Seeded so the demo data set is
- * identical on every load, which keeps charts and totals reproducible.
- */
-export function seededRandom(seed: number): () => number {
-  let state = seed % 2147483647;
-  if (state <= 0) state += 2147483646;
-  return () => {
-    state = (state * 16807) % 2147483647;
-    return (state - 1) / 2147483646;
-  };
-}
-
-/** Hash a string to a positive integer, used to seed per-channel generators. */
-export function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash) || 1;
-}
-
 export function slugify(value: string): string {
   return value
     .toLowerCase()

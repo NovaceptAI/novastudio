@@ -62,7 +62,7 @@ import {
 import { StageChangeError } from '@/services/api';
 import { ASSET_TYPE_LABELS, LICENCE_LABELS, LICENCE_TONES } from '@/types';
 import { formatCurrency, formatDuration, formatFileSize, formatNumber } from '@/lib/format';
-import { DEMO_TODAY, formatDateTime, formatFullDate, isOverdue, relativeToToday } from '@/lib/date';
+import { formatDateTime, formatFullDate, isOverdue, relativeToToday, today } from '@/lib/date';
 import { createId } from '@/lib/utils';
 
 export function ProjectDetailPage() {
@@ -84,7 +84,7 @@ export function ProjectDetailPage() {
       <div className="card-surface">
         <EmptyState
           title="Video project not found"
-          description="It may have been deleted, or the demo data was reset."
+          description="It may have been deleted."
           action={{ label: 'Back to the pipeline', onClick: () => navigate('/pipeline') }}
         />
       </div>
@@ -241,7 +241,7 @@ export function ProjectDetailPage() {
 
         <TabsContent value="media" className="space-y-4 pt-4">
           <MediaPanel projectId={project.id} />
-          <Section title="Attached assets" description="Sample placeholder records — no files are stored.">
+          <Section title="Attached assets" description="Assets recorded against this video in the Asset Library.">
             {projectAssets.length === 0 ? (
               <EmptyState
                 title="No assets yet"
@@ -547,7 +547,7 @@ function ResearchPanel({ projectId }: { projectId: string }) {
                   verifiedBy: null,
                   claimsSupported: [],
                   credibility: 'medium',
-                  addedOn: DEMO_TODAY,
+                  addedOn: today(),
                 },
               ])
             }
@@ -672,7 +672,7 @@ function ResearchPanel({ projectId }: { projectId: string }) {
                       onClick={() => {
                         const next = draft.map((item) =>
                           item.id === record.id
-                            ? { ...item, verifiedOn: DEMO_TODAY, verifiedBy: 'You' }
+                            ? { ...item, verifiedOn: today(), verifiedBy: 'You' }
                             : item,
                         );
                         setDraft(next);

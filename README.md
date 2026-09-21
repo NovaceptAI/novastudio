@@ -1,12 +1,17 @@
 # NovaStudio
 
-An admin dashboard for running a network of ten automated YouTube channels: channel
-configuration, a production pipeline, a publishing calendar, an asset library and
-performance reporting.
+A production tracker for a network of ten YouTube channels: what each channel
+still needs setting up, every video and the stage it has reached, and — on the
+Overview — an ordered list of what to do next.
 
-**This is phase one: a frontend with seeded demo data.** Nothing is connected to
-YouTube or to any production service, and the app says so on every screen that
-shows a number or offers an action that would need one.
+It starts empty. The ten channels exist with only what was specified for them
+(name, languages, and the two stated audiences); every video, idea, asset and
+setting is added by you. Nothing is connected to YouTube or any production
+service yet, so there are no audience numbers anywhere.
+
+> **Data is saved in the browser.** Records live in this browser's localStorage:
+> not shared, not on other devices, and lost if site data is cleared. Use
+> **Settings → Download backup** until there is a server to save to.
 
 ## Setup
 
@@ -48,14 +53,14 @@ would hit the directory and 404.
 
 | Screen | What it covers |
 | --- | --- |
-| **Overview** | Channel and production counts, views and watch time, estimated spend in INR, a publishing-activity chart, a channel performance table, upcoming releases, and everything needing attention. The global channel selector and the date range both filter it. |
-| **Channels** | All ten channels as a grid or a table. Each detail page holds recent videos, the content-idea backlog, the upcoming schedule, editable configuration (audience, tone, languages, formats, duration, cadence, budget, approved sources, editorial rules), branding and voice slots, and an explicit comparison between internal configuration and a connected YouTube channel. |
+| **Overview** | **Next up**: every action that needs a person, most urgent first — failed steps, blockers, overdue videos, reviews waiting, videos due within a week, unverified sources, then unfinished channel setup. Plus counts per stage, upcoming releases, and per-channel progress. Filtered by the channel selector. |
+| **Channels** | All ten channels with setup progress (7 items: audience, tone, formats, duration, cadence, budget, approved sources). Each channel has a setup checklist, idea backlog, schedule, editable configuration, editable branding and voice slots, status, and its intended YouTube handle. |
 | **Content Pipeline** | Idea → Research → Script → Audio → Visuals → Editing → Review → Scheduled → Published, as a board or a table. Blocked work and failed jobs are tracked *alongside* the stages, not as stages. Each project opens onto Brief, Research, Script, Audio & Visuals, Review and Publishing tabs. |
 | **Calendar** | Month and week views, colour-coded per channel, with drag-to-reschedule. |
-| **Asset Library** | Thumbnails, images, video, audio and scripts, filterable by channel, type, language and licence. |
-| **Analytics** | Views, watch time, subscribers, thumbnail CTR, average percentage viewed, production cost and revenue, with Shorts and long-form kept distinguishable. |
+| **Asset Library** | A register of thumbnails, images, video, audio and scripts — channel, video, language, licence, source and attribution. Records only; no files are stored yet. |
+| **Analytics** | What was published and what it cost, per channel, with Shorts and long-form separated. Views, watch time, CTR, subscribers and revenue need YouTube Analytics and are not shown until it is connected. |
 | **Integrations** | YouTube, AWS, ElevenLabs and image/video providers — all "Not connected", each with what it would do and what it needs first. |
-| **Settings** | Default language, timezone, currency, review requirements, budget limits, and the reset-demo-data action. |
+| **Settings** | Default language, timezone, currency, review requirements, budget limits; backup download, restore, and clear all data. |
 
 ### Things worth knowing
 
@@ -66,9 +71,6 @@ would hit the directory and 404.
   or failure, so "where is this" and "is it stuck" stay independent questions.
 - **Two rules are enforced on the Scheduled transition** (both switchable in
   Settings): review sign-off, and a verification date on every research source.
-- **Channels publish below their configured cadence on purpose.** Cadence is the
-  plan and the seeded archive is what shipped; the Overview surfaces the gap
-  instead of hiding it.
 
 ## Project structure
 
@@ -76,26 +78,21 @@ would hit the directory and 404.
 src/
 ├── types/          Domain model. Unions and `as const` maps, no enums.
 │                   The *_VALUES arrays drive iteration order everywhere.
-├── data/           Seed data and the generators that expand it.
-│   ├── channels.ts        The ten channels, hand-written.
-│   ├── project-seeds.ts   34 projects across every stage.
-│   ├── project-builder.ts Expands a seed into a full project: language
-│   │                      tracks, review state, publishing plan, activity.
-│   ├── archive.ts         Published back catalogue for the last 12 weeks.
-│   ├── assets.ts          Placeholder asset records.
-│   └── analytics.ts       180 days of daily per-channel metrics.
+├── data/           The starting workspace.
+│   ├── channels.ts        The ten channels, blank apart from the brief.
+│   └── integrations.ts    Integration descriptions and default settings.
 ├── services/       The API boundary.
 │   ├── api.ts             Every screen talks to this and nothing else.
 │   └── storage.ts         Guarded localStorage access.
 ├── store/          Two contexts: loaded data + mutations, and the global
 │                   channel/date/search filters.
-├── lib/            analytics (aggregation), selectors (pipeline queries),
+├── lib/            selectors (pipeline queries and the Next up list),
 │                   date, format, utils.
 ├── components/
 │   ├── ui/                Primitives on Radix: button, badge, dialog, tabs,
 │   │                      table, field, toast, tooltip, states.
 │   ├── common/            Domain pieces: channel avatar, stat tile, badges,
-│   │                      page header, demo-data notice, filter bar.
+│   │                      page header, notice, filter bar.
 │   ├── charts/            Recharts wrappers with one shared visual language.
 │   ├── layout/            App shell, sidebar, global search.
 │   └── projects/          New-project dialog, board card.
@@ -103,32 +100,11 @@ src/
 └── styles/         Tailwind layer and the design tokens.
 ```
 
-### Demo data
-
-All of it is deterministic — seeded pseudo-random generators keyed off channel
-ids — so charts, tables and totals agree with each other and are identical on
-every load. It is anchored to a fixed date (`DEMO_TODAY` in `lib/date.ts`)
-rather than the system clock.
-
-The numbers are derived rather than invented: impressions come from views and
-CTR, watch time from views and average view duration, Shorts plus long-form
-always sum to total views, `videosPublished` counts projects that actually carry
-a publish date, and revenue is `null` — rendered as "Not monetised" — for the
-channels configured that way.
-
-Local edits are mirrored into `localStorage` under `novastudio.demo.v1`. Metrics
-are *not* persisted; they are recomputed from the stored projects on load, so
-moving a publish date keeps the analytics honest. **Settings → Reset demo data**
-clears everything and restores the seeded workspace.
-
 ### Colour
 
-Each channel owns an accent colour, used for its avatar, its calendar entries
-and its chart series. The ten were checked with a palette validator: they sit in
+Each channel owns an accent colour, used for its avatar and calendar entries. The ten were checked with a palette validator: they sit in
 one lightness band, clear the chroma floor, and every adjacent pair clears the
-colour-vision-deficiency separation threshold against the light surface. Colour
-follows the channel, never its rank, so filtering never repaints the series that
-remain — and no chart relies on colour alone.
+colour-vision-deficiency separation threshold against the light surface.
 
 ## Integration boundaries
 
@@ -146,6 +122,7 @@ Deliberately **not** in this phase:
 | Voice generation | Needs a server-side ElevenLabs key, a character allowance, and a rendered-audio cache so retries do not re-bill. |
 | Image and video generation | Needs a provider with commercial-use terms, a per-channel spend cap, and a human approval step before anything ships. |
 | Authentication and multi-user | There are no accounts; "You" is the only actor. |
+| Server-side storage | Records live in one browser. A backend would make them shared and durable; until then, download backups. |
 
 **No API keys or secrets are collected anywhere in this frontend**, and none
 should be. Anything a browser holds can be read by anyone using that browser.

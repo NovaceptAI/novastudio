@@ -7,7 +7,7 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn('skeleton h-4 w-full', className)} aria-hidden />;
 }
 
-/** Page-level loading placeholder used while the mock service resolves. */
+/** Page-level loading placeholder used while the service layer resolves. */
 export function LoadingState({ label = 'Loading…', rows = 4 }: { label?: string; rows?: number }) {
   return (
     <div className="space-y-3" role="status" aria-live="polite">

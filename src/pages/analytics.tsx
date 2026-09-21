@@ -1,317 +1,159 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { BarChart3, Plug } from 'lucide-react';
 import { useFilters, useScopedChannelIds, useSnapshot } from '@/store/app-store';
-import {
-  Badge,
-  Button,
-  SortableTh,
-  Table,
-  TableWrap,
-  Td,
-  Th,
-  Tr,
-} from '@/components/ui';
-import { ChannelAvatar, DateRangeFilter, DemoDataNotice, PageHeader, StatTile } from '@/components/common';
-import { ChartFrame, ChartLegend } from '@/components/charts/chart-kit';
-import { ChannelViewsChart, FormatSplitChart, ViewsAreaChart } from '@/components/charts/activity-chart';
-import { buildTimeseries, filterMetrics, performanceByChannel, totalsFor } from '@/lib/analytics';
-import {
-  formatCompactInr,
-  formatCompactNumber,
-  formatCurrency,
-  formatHours,
-  formatNumber,
-  formatPercent,
-} from '@/lib/format';
+import { Badge, Button, EmptyState, Table, TableWrap, Td, Th, Tr } from '@/components/ui';
+import { ChannelAvatar, DateRangeFilter, PageHeader, StatTile } from '@/components/common';
+import { ChartFrame } from '@/components/charts/chart-kit';
+import { PublishingActivityChart } from '@/components/charts/activity-chart';
+import type { TimeseriesPoint } from '@/types';
+import { publishedInRange, scopeProjects } from '@/lib/selectors';
 import { eachDay } from '@/lib/date';
-import { useSortableTable } from '@/hooks/use-sortable-table';
+import { formatCompactInr, formatCurrency, formatNumber } from '@/lib/format';
+import { sum } from '@/lib/utils';
 
+/**
+ * Production analytics only. Views, watch time, CTR, subscribers and revenue
+ * come from YouTube Analytics, which is not connected, so this screen reports
+ * what the workspace itself knows — what shipped and what it cost — and says
+ * plainly that audience numbers are unavailable rather than showing zeros.
+ */
 export function AnalyticsPage() {
-  const { channels, metrics } = useSnapshot();
-  const { range, channelId } = useFilters();
+  const { channels, projects } = useSnapshot();
+  const { range } = useFilters();
   const scopedIds = useScopedChannelIds();
-  const [showTable, setShowTable] = useState(false);
 
-  const monetisedIds = useMemo(
-    () => new Set(channels.filter((channel) => channel.monetised).map((channel) => channel.id)),
-    [channels],
-  );
+  const scoped = useMemo(() => scopeProjects(projects, scopedIds), [projects, scopedIds]);
+  const published = useMemo(() => publishedInRange(scoped, range), [scoped, range]);
 
-  const totals = useMemo(
-    () => totalsFor(metrics, range, scopedIds, monetisedIds),
-    [metrics, range, scopedIds, monetisedIds],
-  );
-  const series = useMemo(() => buildTimeseries(metrics, range, scopedIds), [metrics, range, scopedIds]);
-  const performances = useMemo(
-    () => performanceByChannel(metrics, range, scopedIds, monetisedIds),
-    [metrics, range, scopedIds, monetisedIds],
-  );
-
-  /** One column per channel, so colour stays attached to the channel. */
-  const perChannelSeries = useMemo(() => {
-    const rows = eachDay(range).map((date) => {
-      const point: Record<string, number | string> = {
-        date,
-        views: 0,
-        watchTimeHours: 0,
-        published: 0,
-        subscribersGained: 0,
-        revenue: 0,
-        productionCost: 0,
-      };
-      for (const id of scopedIds) point[id] = 0;
-      return point;
-    });
-    const index = new Map(rows.map((row) => [row.date as string, row]));
-    for (const metric of filterMetrics(metrics, range, scopedIds)) {
-      const row = index.get(metric.date);
-      if (!row) continue;
-      row[metric.channelId] = Number(row[metric.channelId] ?? 0) + metric.views;
-      row.views = Number(row.views) + metric.views;
+  const series = useMemo<TimeseriesPoint[]>(() => {
+    const perDay = new Map<string, number>();
+    for (const project of published) {
+      const day = project.publishing.publishedAt!.slice(0, 10);
+      perDay.set(day, (perDay.get(day) ?? 0) + 1);
     }
-    return rows;
-  }, [metrics, range, scopedIds]);
+    return eachDay(range).map((date) => ({
+      date,
+      published: perDay.get(date) ?? 0,
+      views: 0,
+      watchTimeHours: 0,
+      subscribersGained: 0,
+      revenue: 0,
+      productionCost: 0,
+    }));
+  }, [published, range]);
 
-  const splitSeries = useMemo(() => {
-    const rows = eachDay(range).map((date) => ({ date, shortsViews: 0, longFormViews: 0 }));
-    const index = new Map(rows.map((row) => [row.date, row]));
-    for (const metric of filterMetrics(metrics, range, scopedIds)) {
-      const row = index.get(metric.date);
-      if (!row) continue;
-      row.shortsViews += metric.shortsViews;
-      row.longFormViews += metric.longFormViews;
-    }
-    return rows;
-  }, [metrics, range, scopedIds]);
-
-  const channelSeries = useMemo(
-    () =>
-      channels
-        .filter((channel) => scopedIds.includes(channel.id))
-        .map((channel) => ({
-          channelId: channel.id,
-          name: channel.name,
-          color: channel.branding.accentColor,
-        })),
-    [channels, scopedIds],
-  );
-
-  const rows = useMemo(
-    () =>
-      performances.map((performance) => {
-        const channel = channels.find((item) => item.id === performance.channelId)!;
-        return { ...performance, name: channel.name, channel };
-      }),
-    [performances, channels],
-  );
-  const { sorted, sortKey, direction, toggle } = useSortableTable(rows, 'views', 'desc');
-
-  const selectedChannel = channels.find((channel) => channel.id === channelId);
-  const singleChannel = Boolean(selectedChannel);
+  const shorts = published.filter((project) => project.format === 'short').length;
+  const actualSpend = sum(published.map((project) => project.actualCost ?? project.estimatedCost));
+  const inFlight = scoped.filter((project) => project.stage !== 'published' && project.stage !== 'idea');
+  const committed = sum(inFlight.map((project) => project.estimatedCost));
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Analytics"
-        description={
-          selectedChannel
-            ? `${selectedChannel.name} — seeded performance for the selected range.`
-            : 'Seeded performance across the channel network.'
-        }
+        description="What the network has shipped and what it cost, from the videos tracked here."
         actions={<DateRangeFilter />}
       />
 
-      <DemoDataNotice>
-        Demo data — seeded from each channel's configuration. Impressions are derived from views and CTR,
-        watch time from views and average view duration, and Shorts plus long-form always add up to total
-        views. No YouTube Analytics data is involved.
-      </DemoDataNotice>
-
-      <section aria-label="Headline metrics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Views" value={formatCompactNumber(totals.views)} changePct={totals.viewsChangePct} />
-        <StatTile label="Watch time" value={formatHours(totals.watchTimeHours)} />
-        <StatTile
-          label="Subscribers gained (net)"
-          value={formatNumber(totals.subscribersNet)}
-          footnote="gained minus lost"
-        />
-        <StatTile
-          label="Thumbnail CTR"
-          value={formatPercent(totals.thumbnailCtr, 2)}
-          footnote={`${formatCompactNumber(totals.impressions)} impressions`}
-        />
+      <section className="card-surface flex flex-wrap items-start gap-3 p-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-subtle text-muted-foreground">
+          <Plug className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">Audience numbers need YouTube</h2>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Views, watch time, subscribers, thumbnail CTR, average percentage viewed and revenue come
+            from YouTube Analytics. Until a channel is connected there is nothing real to show, so this
+            page does not show them.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" asChild>
+          <Link to="/integrations">Integrations</Link>
+        </Button>
       </section>
 
-      <section aria-label="Cost and revenue" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Production totals" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Published in range" value={formatNumber(published.length)} />
         <StatTile
-          label="Average percentage viewed"
-          value={formatPercent(totals.averagePercentageViewed)}
-          footnote="view-weighted"
+          label="Long-form / Shorts"
+          value={`${published.length - shorts} / ${shorts}`}
+          footnote="published in range"
         />
         <StatTile
-          label="Production cost"
-          value={formatCompactInr(totals.productionCost)}
-          footnote="seeded estimate in range"
-          invertChange
+          label="Spend on published"
+          value={formatCompactInr(actualSpend)}
+          footnote="actual cost where recorded, else the estimate"
         />
-        <StatTile
-          label="Revenue"
-          value={
-            singleChannel && !selectedChannel!.monetised
-              ? 'Not monetised'
-              : formatCurrency(totals.revenue, 'INR')
-          }
-          footnote={
-            singleChannel
-              ? selectedChannel!.monetised
-                ? 'seeded estimate'
-                : 'no monetisation configured'
-              : totals.hasUnmonetised
-                ? 'excludes channels that are not monetised'
-                : 'seeded estimate'
-          }
-        />
-        <StatTile
-          label="Shorts share of views"
-          value={formatPercent(
-            totals.views === 0 ? 0 : (totals.shortsViews / totals.views) * 100,
-          )}
-          footnote={`${formatCompactNumber(totals.longFormViews)} long-form views`}
-        />
+        <StatTile label="Committed" value={formatCompactInr(committed)} footnote={`${inFlight.length} videos in flight`} />
       </section>
 
-      <ChartFrame title="Views over time" description="Daily views for the channels in scope.">
-        <ViewsAreaChart data={series} height={240} />
+      <ChartFrame title="Videos published" description="Per day, in the selected range.">
+        {published.length === 0 ? (
+          <EmptyState
+            icon={BarChart3}
+            title="Nothing published in this range"
+            description="Videos appear here once they reach the Published stage."
+          />
+        ) : (
+          <PublishingActivityChart data={series} />
+        )}
       </ChartFrame>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ChartFrame
-          title="Views by channel"
-          description="One line per channel; colour stays with the channel when the selection changes."
-          legend={
-            <ChartLegend
-              items={channelSeries.map((item) => ({ label: item.name, color: item.color }))}
-            />
-          }
-          actions={
-            <Button variant="ghost" size="sm" onClick={() => setShowTable((value) => !value)}>
-              {showTable ? 'Hide table' : 'Show as table'}
-            </Button>
-          }
-        >
-          <ChannelViewsChart data={perChannelSeries} series={channelSeries} height={250} />
-          {showTable && (
-            <TableWrap className="mt-3 max-h-64 overflow-y-auto">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Date</Th>
-                    {channelSeries.map((item) => (
-                      <Th key={item.channelId} className="text-right">
-                        {item.name}
-                      </Th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {perChannelSeries.map((row) => (
-                    <Tr key={String(row.date)}>
-                      <Td className="whitespace-nowrap text-muted-foreground">{String(row.date)}</Td>
-                      {channelSeries.map((item) => (
-                        <Td key={item.channelId} className="tabular text-right">
-                          {formatNumber(Number(row[item.channelId] ?? 0))}
-                        </Td>
-                      ))}
-                    </Tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrap>
-          )}
-        </ChartFrame>
-
-        <ChartFrame
-          title="Shorts and long-form"
-          description="Stacked daily views. The two parts add up to the total."
-          legend={
-            <ChartLegend
-              items={[
-                { label: 'Long-form', color: 'hsl(243 75.4% 58.6%)' },
-                { label: 'Shorts', color: 'hsl(187 92% 33%)' },
-              ]}
-            />
-          }
-        >
-          <FormatSplitChart data={splitSeries} height={250} />
-        </ChartFrame>
-      </div>
 
       <section className="card-surface">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Per-channel performance</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Channels without monetisation report “Not monetised” rather than zero revenue.
-          </p>
+          <h2 className="text-sm font-semibold">Per channel</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Production in the selected range, against budget.</p>
         </div>
         <TableWrap>
           <Table>
             <thead>
               <tr>
-                <SortableTh active={sortKey === 'name'} direction={direction} onSort={() => toggle('name')}>
-                  Channel
-                </SortableTh>
-                <SortableTh active={sortKey === 'views'} direction={direction} onSort={() => toggle('views')} className="text-right">
-                  Views
-                </SortableTh>
-                <SortableTh active={sortKey === 'longFormViews'} direction={direction} onSort={() => toggle('longFormViews')} className="text-right">
-                  Long-form
-                </SortableTh>
-                <SortableTh active={sortKey === 'shortsViews'} direction={direction} onSort={() => toggle('shortsViews')} className="text-right">
-                  Shorts
-                </SortableTh>
-                <SortableTh active={sortKey === 'watchTimeHours'} direction={direction} onSort={() => toggle('watchTimeHours')} className="text-right">
-                  Watch time
-                </SortableTh>
-                <SortableTh active={sortKey === 'thumbnailCtr'} direction={direction} onSort={() => toggle('thumbnailCtr')} className="text-right">
-                  CTR
-                </SortableTh>
-                <SortableTh active={sortKey === 'averagePercentageViewed'} direction={direction} onSort={() => toggle('averagePercentageViewed')} className="text-right">
-                  Avg viewed
-                </SortableTh>
-                <SortableTh active={sortKey === 'productionCost'} direction={direction} onSort={() => toggle('productionCost')} className="text-right">
-                  Cost
-                </SortableTh>
+                <Th>Channel</Th>
+                <Th className="text-right">Published</Th>
+                <Th className="text-right">Long-form</Th>
+                <Th className="text-right">Shorts</Th>
+                <Th className="text-right">Spend</Th>
+                <Th className="text-right">Monthly budget</Th>
                 <Th className="text-right">Revenue</Th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row) => (
-                <Tr key={row.channelId}>
-                  <Td>
-                    <Link
-                      to={`/channels/${row.channel.slug}`}
-                      className="flex items-center gap-2 font-medium hover:text-primary"
-                    >
-                      <ChannelAvatar channel={row.channel} size="sm" />
-                      <span className="truncate">{row.name}</span>
-                    </Link>
-                  </Td>
-                  <Td className="tabular text-right">{formatCompactNumber(row.views)}</Td>
-                  <Td className="tabular text-right">{formatCompactNumber(row.longFormViews)}</Td>
-                  <Td className="tabular text-right">{formatCompactNumber(row.shortsViews)}</Td>
-                  <Td className="tabular text-right">{formatHours(row.watchTimeHours)}</Td>
-                  <Td className="tabular text-right">{formatPercent(row.thumbnailCtr, 2)}</Td>
-                  <Td className="tabular text-right">{formatPercent(row.averagePercentageViewed)}</Td>
-                  <Td className="tabular text-right">{formatCompactInr(row.productionCost)}</Td>
-                  <Td className="tabular text-right">
-                    {row.revenue === null ? (
-                      <Badge tone="neutral">Not monetised</Badge>
-                    ) : (
-                      formatCurrency(row.revenue, 'INR')
-                    )}
-                  </Td>
-                </Tr>
-              ))}
+              {channels
+                .filter((channel) => scopedIds.includes(channel.id))
+                .map((channel) => {
+                  const rows = published.filter((project) => project.channelId === channel.id);
+                  const channelShorts = rows.filter((project) => project.format === 'short').length;
+                  return (
+                    <Tr key={channel.id}>
+                      <Td>
+                        <Link
+                          to={`/channels/${channel.slug}`}
+                          className="flex items-center gap-2 font-medium hover:text-primary"
+                        >
+                          <ChannelAvatar channel={channel} size="sm" />
+                          <span className="truncate">{channel.name}</span>
+                        </Link>
+                      </Td>
+                      <Td className="tabular text-right">{rows.length}</Td>
+                      <Td className="tabular text-right">{rows.length - channelShorts}</Td>
+                      <Td className="tabular text-right">{channelShorts}</Td>
+                      <Td className="tabular text-right">
+                        {formatCurrency(sum(rows.map((project) => project.actualCost ?? project.estimatedCost)))}
+                      </Td>
+                      <Td className="tabular text-right">
+                        {channel.config.monthlyBudget ? (
+                          formatCurrency(channel.config.monthlyBudget)
+                        ) : (
+                          <span className="text-2xs text-muted-foreground">Not set</span>
+                        )}
+                      </Td>
+                      <Td className="text-right">
+                        <Badge tone="neutral">{channel.monetised ? 'Needs YouTube' : 'Not monetised'}</Badge>
+                      </Td>
+                    </Tr>
+                  );
+                })}
             </tbody>
           </Table>
         </TableWrap>

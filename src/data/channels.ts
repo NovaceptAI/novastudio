@@ -1,551 +1,111 @@
-import type { ApprovedSource, Channel, VoiceProfile } from '@/types';
+import type { AudienceRating, Channel, LanguageCode } from '@/types';
 
 /**
- * The ten seeded channels. Everything here is internal configuration: no
- * channel is linked to a real YouTube account, so every `youtube.state` is
- * `not_connected` and the handles are intentions, not claims.
+ * The ten channels, as named in the brief. Only what the brief actually says is
+ * filled in — the name, the two stated audiences, and the language tracks.
+ * Everything else (audience, tone, cadence, budget, sources, rules, branding,
+ * voices) starts empty and is set on each channel's Configuration tab.
+ *
+ * Accent colours and monograms are UI identifiers, not channel data. The colour
+ * order was checked for colour-vision separation between neighbours.
  */
 
-function source(
-  id: string,
-  label: string,
-  url: string,
-  type: ApprovedSource['type'],
-  credibility: ApprovedSource['credibility'],
-  addedOn: string,
-  notes?: string,
-): ApprovedSource {
-  return { id, label, url, type, credibility, addedOn, notes };
+interface ChannelSeed {
+  id: string;
+  slug: string;
+  name: string;
+  monogram: string;
+  accentColor: string;
+  audienceRating?: AudienceRating;
+  audience?: string;
+  languages?: LanguageCode[];
+  primaryLanguage?: LanguageCode;
 }
 
-function voice(
-  id: string,
-  name: string,
-  role: VoiceProfile['role'],
-  language: VoiceProfile['language'],
-  characteristics: string,
-): VoiceProfile {
-  return {
-    id,
-    name,
-    role,
-    language,
-    characteristics,
-    provider: 'unassigned',
-    providerVoiceId: null,
-    status: 'placeholder',
-  };
-}
-
-export const CHANNELS: Channel[] = [
-  {
-    id: 'ch_ai_smb',
-    slug: 'ai-for-small-businesses',
-    name: 'AI for Small Businesses',
-    niche: 'Applied AI · SMB operations',
-    description:
-      'Practical, jargon-free walkthroughs of AI tools that a ten-person business can actually adopt this week.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2025-11-04',
-    subscribers: 128400,
-    config: {
-      audience:
-        'Owners and operations leads at Indian businesses with 5–50 staff, comfortable with software but not technical.',
-      tone: 'Calm, concrete and sceptical. Show the tool doing real work; name the costs and the limits.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['tutorial', 'explainer', 'case_study', 'short'],
-      targetDurationMinutes: { min: 8, max: 14 },
-      cadence: { videosPerWeek: 3, publishDays: ['mon', 'wed', 'fri'], publishTime: '18:30' },
-      monthlyBudget: 185000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_ai_1', 'OpenAI product documentation', 'https://platform.openai.com/docs', 'documentation', 'high', '2025-11-06'),
-        source('src_ai_2', 'Anthropic documentation', 'https://docs.anthropic.com', 'documentation', 'high', '2025-11-06'),
-        source('src_ai_3', 'NASSCOM research reports', 'https://nasscom.in/knowledge-center', 'report', 'high', '2026-01-12', 'Use for India SMB adoption figures only.'),
-        source('src_ai_4', 'MSME Ministry annual report', 'https://msme.gov.in/relatedlinks/annual-report-ministry-micro-small-and-medium-enterprises', 'official_site', 'high', '2026-02-20'),
-      ],
-      editorialRules: [
-        'Every pricing figure must carry the date it was checked; prices change monthly.',
-        'Never claim a tool is "free" without naming the limits of the free tier.',
-        'Show the actual screen. No stock footage of people pointing at laptops.',
-        'If a workflow needs a developer, say so in the first two minutes.',
-      ],
-    },
-    branding: {
-      accentColor: '#4f46e5',
-      monogram: 'AI',
-      thumbnailStyle: 'Screenshot on off-white, one bold four-word phrase, indigo underline.',
-      titleTypography: 'Inter Tight Bold, sentence case, no all-caps.',
-      lowerThirdStyle: 'Thin indigo bar, tool name left, version and date right.',
-      musicDirection: 'Sparse, low-percussion beds. Silence under demo audio.',
-    },
-    voices: [
-      voice('vp_ai_en', 'Primary narrator (EN)', 'narrator', 'en', 'Measured Indian English, mid-pace, warm but businesslike.'),
-      voice('vp_ai_hi', 'Primary narrator (HI)', 'narrator', 'hi', 'Conversational Hindi with natural English tool names, unhurried.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@AIForSmallBusiness', lastCheckedAt: null },
-  },
-  {
-    id: 'ch_office',
-    slug: 'office-productivity-careers',
-    name: 'Office Productivity & Careers',
-    niche: 'Workplace skills · Career growth',
-    description:
-      'Spreadsheet craft, meeting survival and the unwritten rules of getting promoted, for the Indian office worker.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2025-12-02',
-    subscribers: 94200,
-    config: {
-      audience:
-        'Individual contributors aged 24–38 in Indian corporate roles, wanting visible wins at work.',
-      tone: 'Direct and practical. Assume intelligence, not experience. No hustle-culture moralising.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['tutorial', 'listicle', 'short', 'explainer'],
-      targetDurationMinutes: { min: 6, max: 11 },
-      cadence: { videosPerWeek: 4, publishDays: ['mon', 'tue', 'thu', 'sat'], publishTime: '07:30' },
-      monthlyBudget: 142000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_off_1', 'Microsoft 365 support', 'https://support.microsoft.com/en-us/office', 'documentation', 'high', '2025-12-04'),
-        source('src_off_2', 'Google Workspace Learning Center', 'https://support.google.com/a/users', 'documentation', 'high', '2025-12-04'),
-        source('src_off_3', 'Harvard Business Review', 'https://hbr.org', 'article', 'medium', '2026-01-08', 'Ideas only — never cite HBR for statistics without the underlying study.'),
-      ],
-      editorialRules: [
-        'Every shortcut is demonstrated on screen at real speed, then once slowly.',
-        'Name the software version; menus move between releases.',
-        'No salary-negotiation advice that assumes a US employment context.',
-        'Avoid "productivity guru" framing. The viewer has a job, not a lifestyle.',
-      ],
-    },
-    branding: {
-      accentColor: '#d97706',
-      monogram: 'OP',
-      thumbnailStyle: 'Split frame: before/after of the same screen, amber divider.',
-      titleTypography: 'Inter SemiBold, high contrast, max six words.',
-      lowerThirdStyle: 'Amber keycap graphics for shortcuts, bottom-centre.',
-      musicDirection: 'Bright, light marimba. Cut music entirely during demos.',
-    },
-    voices: [
-      voice('vp_off_en', 'Host (EN)', 'host', 'en', 'Crisp, energetic, slightly faster than average pace.'),
-      voice('vp_off_hi', 'Host (HI)', 'host', 'hi', 'Friendly colleague register, Hinglish where natural.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@OfficeProductivityIn', lastCheckedAt: null },
-  },
-  {
-    id: 'ch_english',
-    slug: 'english-for-hindi-speakers',
-    name: 'English for Hindi Speakers',
-    niche: 'Language learning · Spoken English',
-    description:
-      'Spoken English taught in Hindi — pronunciation, sentence patterns and the phrases that actually come up.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2025-10-18',
-    subscribers: 342700,
-    config: {
-      audience:
-        'Hindi-first learners aged 18–35 in tier-2 and tier-3 cities preparing for interviews and customer-facing work.',
-      tone: 'Patient and encouraging. Never mock a mistake. Repetition is a feature.',
-      languages: ['hi', 'en'],
-      primaryLanguage: 'hi',
-      preferredFormats: ['tutorial', 'explainer', 'short'],
-      targetDurationMinutes: { min: 5, max: 10 },
-      cadence: { videosPerWeek: 5, publishDays: ['mon', 'tue', 'wed', 'thu', 'fri'], publishTime: '06:00' },
-      monthlyBudget: 156000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_eng_1', 'Cambridge Dictionary', 'https://dictionary.cambridge.org', 'documentation', 'high', '2025-10-20'),
-        source('src_eng_2', 'Merriam-Webster usage notes', 'https://www.merriam-webster.com/grammar', 'documentation', 'high', '2025-10-20'),
-        source('src_eng_3', 'British Council LearnEnglish', 'https://learnenglish.britishcouncil.org', 'official_site', 'high', '2026-01-15'),
-      ],
-      editorialRules: [
-        'Every English sentence appears on screen in text as it is spoken.',
-        'Explain in Hindi, demonstrate in English. Never the reverse.',
-        'Teach one pattern per video and drill it at least four times.',
-        'Mark British vs American usage whenever they differ.',
-      ],
-    },
-    branding: {
-      accentColor: '#0d9488',
-      monogram: 'EN',
-      thumbnailStyle: 'Large Devanagari question, small English answer below, teal highlight.',
-      titleTypography: 'Inter + Noto Sans Devanagari, mixed-script titles.',
-      lowerThirdStyle: 'Teal sentence strip with the pattern being drilled.',
-      musicDirection: 'Gentle acoustic loop, ducked heavily under speech.',
-    },
-    voices: [
-      voice('vp_eng_hi', 'Teacher (HI)', 'explainer', 'hi', 'Warm, slow, deliberate. Clear consonant endings.'),
-      voice('vp_eng_en', 'Model speaker (EN)', 'narrator', 'en', 'Neutral clear English for the sentences being taught.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@EnglishForHindiSpeakers', lastCheckedAt: null },
-  },
-  {
-    id: 'ch_brands',
-    slug: 'business-and-brand-stories',
-    name: 'Business & Brand Stories',
-    niche: 'Business history · Brand case studies',
-    description:
-      'How companies were built, why some collapsed, and what the numbers actually said at the time.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2026-01-09',
-    subscribers: 76300,
-    config: {
-      audience:
-        'Business-curious viewers aged 22–45 who want the documented story, not a motivational retelling.',
-      tone: 'Narrative and evidence-led. Attribute every claim. Let the failures stay failures.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['story', 'case_study', 'explainer'],
-      targetDurationMinutes: { min: 12, max: 20 },
-      cadence: { videosPerWeek: 2, publishDays: ['wed', 'sun'], publishTime: '19:00' },
-      monthlyBudget: 210000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_brand_1', 'SEBI filings and disclosures', 'https://www.sebi.gov.in/filings.html', 'official_site', 'high', '2026-01-11'),
-        source('src_brand_2', 'SEC EDGAR full-text search', 'https://efts.sec.gov/LATEST/search-index?q=', 'dataset', 'high', '2026-01-11'),
-        source('src_brand_3', 'Reuters business archive', 'https://www.reuters.com/business', 'article', 'high', '2026-01-11'),
-        source('src_brand_4', 'Company annual reports (investor relations pages)', 'https://www.annualreports.com', 'report', 'high', '2026-02-02', 'Prefer the primary filing over any secondary summary.'),
-      ],
-      editorialRules: [
-        'Two independent sources for any figure that shapes the story.',
-        'Distinguish what was known at the time from what we know now.',
-        'No accusations of illegality without a court finding or regulator action.',
-        'Currency figures carry the year and the unit; no unadjusted decade comparisons.',
-      ],
-    },
-    branding: {
-      accentColor: '#e11d48',
-      monogram: 'BS',
-      thumbnailStyle: 'Archival photo, desaturated, single crimson keyline and a date stamp.',
-      titleTypography: 'Inter Tight, editorial caps for the company name only.',
-      lowerThirdStyle: 'Crimson card with source name and document date, lower-left.',
-      musicDirection: 'Restrained strings and piano. No tension stings over factual claims.',
-    },
-    voices: [
-      voice('vp_brand_en', 'Narrator (EN)', 'narrator', 'en', 'Documentary register, low and unhurried.'),
-      voice('vp_brand_hi', 'Narrator (HI)', 'narrator', 'hi', 'Formal Hindi documentary voice, measured.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@BusinessAndBrandStories', lastCheckedAt: null },
-  },
-  {
-    id: 'ch_growth',
-    slug: 'motivation-clarity-personal-growth',
-    name: 'Motivation, Clarity & Personal Growth',
-    niche: 'Personal development · Focus',
-    description:
-      'Evidence-grounded thinking on focus, habit and clarity — without the shouting or the miracle promises.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2025-09-22',
-    subscribers: 218900,
-    config: {
-      audience:
-        'Adults 20–40 feeling scattered and over-committed, sceptical of self-help but still looking.',
-      tone: 'Thoughtful, quiet, honest about uncertainty. Never guarantee an outcome.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['explainer', 'story', 'short'],
-      targetDurationMinutes: { min: 7, max: 13 },
-      cadence: { videosPerWeek: 3, publishDays: ['tue', 'thu', 'sun'], publishTime: '06:30' },
-      monthlyBudget: 128000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_growth_1', 'PubMed', 'https://pubmed.ncbi.nlm.nih.gov', 'dataset', 'high', '2025-09-24', 'Peer-reviewed only; check sample size before citing.'),
-        source('src_growth_2', 'APA PsycNet', 'https://psycnet.apa.org', 'dataset', 'high', '2025-09-24'),
-        source('src_growth_3', 'Nature Human Behaviour', 'https://www.nature.com/nathumbehav', 'report', 'high', '2026-03-03'),
-      ],
-      editorialRules: [
-        'No psychological study cited without its sample size and replication status.',
-        'Never present a technique as a treatment for a clinical condition.',
-        'Signpost speculation explicitly: "this is a hypothesis, not a finding".',
-        'No countdown-timer urgency or manufactured scarcity in thumbnails.',
-      ],
-    },
-    branding: {
-      accentColor: '#9333ea',
-      monogram: 'MC',
-      thumbnailStyle: 'Single subject, generous negative space, one short violet-underlined phrase.',
-      titleTypography: 'Inter Light for the question, SemiBold for the subject.',
-      lowerThirdStyle: 'Violet citation chip: study author and year.',
-      musicDirection: 'Ambient pads, long decay, no drums.',
-    },
-    voices: [
-      voice('vp_growth_en', 'Narrator (EN)', 'narrator', 'en', 'Low, calm, deliberate pauses between ideas.'),
-      voice('vp_growth_hi', 'Narrator (HI)', 'narrator', 'hi', 'Reflective Hindi, soft delivery, poetic phrasing allowed.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@ClarityAndGrowth', lastCheckedAt: null },
-  },
+const SEEDS: ChannelSeed[] = [
+  { id: 'ch_ai_smb', slug: 'ai-for-small-businesses', name: 'AI for Small Businesses', monogram: 'AI', accentColor: '#4f46e5' },
+  { id: 'ch_office', slug: 'office-productivity-careers', name: 'Office Productivity & Careers', monogram: 'OP', accentColor: '#d97706' },
+  { id: 'ch_english', slug: 'english-for-hindi-speakers', name: 'English for Hindi Speakers', monogram: 'EN', accentColor: '#0d9488', primaryLanguage: 'hi' },
+  { id: 'ch_brands', slug: 'business-and-brand-stories', name: 'Business & Brand Stories', monogram: 'BS', accentColor: '#e11d48' },
+  { id: 'ch_growth', slug: 'motivation-clarity-personal-growth', name: 'Motivation, Clarity & Personal Growth', monogram: 'MC', accentColor: '#9333ea' },
   {
     id: 'ch_relationships',
     slug: 'relationships-intimacy-compatibility',
     name: 'Relationships, Intimacy & Compatibility',
-    niche: 'Adult relationship education',
-    description:
-      'Evidence-based relationship and intimacy education for adults, handled clinically and without euphemism.',
-    status: 'active',
+    monogram: 'RI',
+    accentColor: '#16a34a',
     audienceRating: 'mature',
-    monetised: false,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2026-02-14',
-    subscribers: 41800,
-    config: {
-      audience:
-        'Adults 25–45 in long-term relationships, looking for clinical grounding rather than folk advice.',
-      tone: 'Clinical, respectful, plain-spoken. Sex-positive without being prurient.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['explainer', 'interview_style', 'case_study'],
-      targetDurationMinutes: { min: 9, max: 16 },
-      cadence: { videosPerWeek: 2, publishDays: ['thu', 'sun'], publishTime: '21:00' },
-      monthlyBudget: 118000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_rel_1', 'The Gottman Institute research', 'https://www.gottman.com/about/research', 'report', 'high', '2026-02-16'),
-        source('src_rel_2', 'Journal of Sex & Marital Therapy', 'https://www.tandfonline.com/journals/usmt20', 'report', 'high', '2026-02-16'),
-        source('src_rel_3', 'WHO sexual health guidance', 'https://www.who.int/health-topics/sexual-health', 'official_site', 'high', '2026-02-16'),
-      ],
-      editorialRules: [
-        'Age-restrict every upload; mark the audience as adult on the platform.',
-        'Anatomical and clinical terms only. No slang, no innuendo, no visual suggestion.',
-        'Consent framing is mandatory in any video touching on physical intimacy.',
-        'Point to a professional when the topic crosses into therapy or medicine.',
-        'No imagery that could read as sexual content. Diagrams and typography only.',
-      ],
-    },
-    branding: {
-      accentColor: '#16a34a',
-      monogram: 'RI',
-      thumbnailStyle: 'Typographic only. No bodies, no couples, no suggestive staging.',
-      titleTypography: 'Inter Medium, clinical phrasing, question form.',
-      lowerThirdStyle: 'Green chip carrying the journal name and year.',
-      musicDirection: 'Warm low strings, very low in the mix.',
-    },
-    voices: [
-      voice('vp_rel_en', 'Educator (EN)', 'explainer', 'en', 'Composed, non-judgmental, clinical warmth.'),
-      voice('vp_rel_hi', 'Educator (HI)', 'explainer', 'hi', 'Respectful formal Hindi; clinical vocabulary kept in English.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@RelationshipsEducation', lastCheckedAt: null },
+    audience: 'Adult educational audience.',
   },
-  {
-    id: 'ch_cricket',
-    slug: 'cricket-explained',
-    name: 'Cricket Explained',
-    niche: 'Cricket analysis · Tactics',
-    description:
-      'Field settings, match-ups and why the captain did that — cricket explained with the data on screen.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2025-08-30',
-    subscribers: 287500,
-    config: {
-      audience:
-        'Cricket followers aged 16–45 who watch every match and want the tactical layer underneath it.',
-      tone: 'Analytical and fast. Respectful of players; hard on decisions, never on people.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['explainer', 'short', 'listicle', 'case_study'],
-      targetDurationMinutes: { min: 6, max: 12 },
-      cadence: { videosPerWeek: 4, publishDays: ['mon', 'wed', 'fri', 'sat'], publishTime: '20:00' },
-      monthlyBudget: 168000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_cri_1', 'ESPNcricinfo Statsguru', 'https://stats.espncricinfo.com/ci/engine/stats/index.html', 'dataset', 'high', '2025-09-01'),
-        source('src_cri_2', 'ICC playing conditions', 'https://www.icc-cricket.com/about/the-icc/publications/playing-conditions', 'official_site', 'high', '2025-09-01'),
-        source('src_cri_3', 'Cricsheet ball-by-ball data', 'https://cricsheet.org', 'dataset', 'high', '2026-01-20'),
-      ],
-      editorialRules: [
-        'No broadcast footage. Recreate every passage of play as an animated diagram.',
-        'Every statistic carries its sample: format, period and match count.',
-        'Never speculate about a player’s fitness or private life.',
-        'Separate what the data shows from what the commentary claimed.',
-      ],
-    },
-    branding: {
-      accentColor: '#0891b2',
-      monogram: 'CX',
-      thumbnailStyle: 'Top-down field diagram with fielders as dots and one cyan arrow.',
-      titleTypography: 'Inter Tight Bold, one tactical question per title.',
-      lowerThirdStyle: 'Cyan scoreline strip with over number and match context.',
-      musicDirection: 'Percussive, driving under diagrams; silent under analysis.',
-    },
-    voices: [
-      voice('vp_cri_en', 'Analyst (EN)', 'host', 'en', 'Quick, enthusiastic, commentator cadence without shouting.'),
-      voice('vp_cri_hi', 'Analyst (HI)', 'host', 'hi', 'Hindi commentary energy; English for technical terms.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@CricketExplained', lastCheckedAt: null },
-  },
-  {
-    id: 'ch_pets',
-    slug: 'pets-and-animal-behaviour',
-    name: 'Pets & Animal Behaviour',
-    niche: 'Animal behaviour · Pet care',
-    description:
-      'What your animal is actually telling you, grounded in ethology rather than dominance folklore.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2025-11-27',
-    subscribers: 163200,
-    config: {
-      audience:
-        'Indian pet owners, mostly first-time dog and cat guardians aged 22–45.',
-      tone: 'Warm, curious, science-first. Correct myths gently and name them as myths.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['explainer', 'tutorial', 'short', 'story'],
-      targetDurationMinutes: { min: 6, max: 12 },
-      cadence: { videosPerWeek: 3, publishDays: ['tue', 'fri', 'sun'], publishTime: '17:00' },
-      monthlyBudget: 134000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_pet_1', 'Journal of Veterinary Behavior', 'https://www.journalvetbehavior.com', 'report', 'high', '2025-11-29'),
-        source('src_pet_2', 'American Veterinary Medical Association', 'https://www.avma.org', 'official_site', 'high', '2025-11-29'),
-        source('src_pet_3', 'RSPCA animal welfare guidance', 'https://www.rspca.org.uk/adviceandwelfare', 'official_site', 'medium', '2026-01-30'),
-      ],
-      editorialRules: [
-        'No dominance or "alpha" framing; it is not supported by current ethology.',
-        'Any health topic ends by pointing the viewer to a veterinarian.',
-        'No footage of distressed animals, even to illustrate a problem.',
-        'Indian context: street-dog interactions and climate-appropriate care.',
-      ],
-    },
-    branding: {
-      accentColor: '#ea580c',
-      monogram: 'PA',
-      thumbnailStyle: 'Close animal portrait, calm expression, orange corner label.',
-      titleTypography: 'Inter SemiBold, question-first, no clickbait punctuation.',
-      lowerThirdStyle: 'Orange chip naming the behaviour being shown.',
-      musicDirection: 'Light plucked strings; cut entirely under animal audio.',
-    },
-    voices: [
-      voice('vp_pet_en', 'Narrator (EN)', 'narrator', 'en', 'Friendly, curious, gently paced.'),
-      voice('vp_pet_hi', 'Narrator (HI)', 'narrator', 'hi', 'Warm conversational Hindi, affectionate register.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@PetsAndBehaviour', lastCheckedAt: null },
-  },
-  {
-    id: 'ch_mystery',
-    slug: 'original-hindi-mysteries',
-    name: 'Original Hindi Mysteries',
-    niche: 'Original fiction · Audio drama',
-    description:
-      'Original serialised Hindi mystery fiction — written in-house, scored, and clearly labelled as fiction.',
-    status: 'active',
-    audienceRating: 'general',
-    monetised: true,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2026-03-06',
-    subscribers: 58900,
-    config: {
-      audience:
-        'Hindi-speaking fiction listeners aged 18–40 who consume audio drama on commutes and at night.',
-      tone: 'Atmospheric, restrained, character-led. Tension from withheld information, not gore.',
-      languages: ['hi'],
-      primaryLanguage: 'hi',
-      preferredFormats: ['story', 'long_form'],
-      targetDurationMinutes: { min: 18, max: 30 },
-      cadence: { videosPerWeek: 2, publishDays: ['fri', 'sat'], publishTime: '22:00' },
-      monthlyBudget: 176000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_mys_1', 'Indian Penal Code (India Code)', 'https://www.indiacode.nic.in', 'official_site', 'high', '2026-03-08', 'For procedural accuracy in investigation scenes.'),
-        source('src_mys_2', 'Bureau of Police Research & Development', 'https://bprd.nic.in', 'official_site', 'medium', '2026-03-08'),
-      ],
-      editorialRules: [
-        'Every episode opens and closes with a fiction disclaimer card.',
-        'No real person, case or place is depicted as being involved in a crime.',
-        'Violence stays off-screen and off-mic; aftermath only.',
-        'Serialised arcs resolve within six episodes. No permanent cliffhangers.',
-      ],
-    },
-    branding: {
-      accentColor: '#c026d3',
-      monogram: 'HM',
-      thumbnailStyle: 'Single lit object in darkness, Devanagari episode number, plum rim light.',
-      titleTypography: 'Noto Serif Devanagari for the title, Inter for the episode tag.',
-      lowerThirdStyle: 'Plum episode marker with chapter name, upper-right.',
-      musicDirection: 'Sparse harmonium and low drone; heavy use of silence.',
-    },
-    voices: [
-      voice('vp_mys_narr', 'Narrator (HI)', 'narrator', 'hi', 'Low, intimate, close-mic storytelling voice.'),
-      voice('vp_mys_insp', 'Inspector Devika Rao', 'character', 'hi', 'Clipped, tired, authoritative. Mid-40s.'),
-      voice('vp_mys_witness', 'Recurring witness', 'character', 'hi', 'Nervous, higher register, rural Uttar Pradesh accent.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@HindiMysteries', lastCheckedAt: null },
-  },
+  { id: 'ch_cricket', slug: 'cricket-explained', name: 'Cricket Explained', monogram: 'CX', accentColor: '#0891b2' },
+  { id: 'ch_pets', slug: 'pets-and-animal-behaviour', name: 'Pets & Animal Behaviour', monogram: 'PA', accentColor: '#ea580c' },
+  { id: 'ch_mystery', slug: 'original-hindi-mysteries', name: 'Original Hindi Mysteries', monogram: 'HM', accentColor: '#c026d3', languages: ['hi'], primaryLanguage: 'hi' },
   {
     id: 'ch_kids',
     slug: 'tumbletail-kids-tv',
     name: 'Tumbletail Kids TV',
-    niche: 'Preschool animation · Ages 4–7',
-    description:
-      'Gentle talking-animal stories for ages 4–7, built around one feeling or idea per episode.',
-    status: 'setup',
+    monogram: 'TT',
+    accentColor: '#65a30d',
     audienceRating: 'family',
-    monetised: false,
-    timezone: 'Asia/Kolkata',
-    createdOn: '2026-06-15',
-    subscribers: 12400,
-    config: {
-      audience:
-        'Children aged 4–7 watching with a parent nearby; parents are the ones who subscribe.',
-      tone: 'Kind, slow and predictable. Gentle humour, no sarcasm, no peril.',
-      languages: ['en', 'hi'],
-      primaryLanguage: 'en',
-      preferredFormats: ['story', 'short'],
-      targetDurationMinutes: { min: 5, max: 9 },
-      cadence: { videosPerWeek: 2, publishDays: ['wed', 'sat'], publishTime: '16:00' },
-      monthlyBudget: 198000,
-      currency: 'INR',
-      approvedSources: [
-        source('src_kid_1', 'Common Sense Media age guidance', 'https://www.commonsensemedia.org', 'official_site', 'high', '2026-06-17'),
-        source('src_kid_2', 'AAP media and children guidance', 'https://www.aap.org', 'official_site', 'high', '2026-06-17'),
-        source('src_kid_3', 'COPPA compliance guidance (FTC)', 'https://www.ftc.gov/business-guidance/privacy-security/childrens-privacy', 'documentation', 'high', '2026-06-17'),
-      ],
-      editorialRules: [
-        'Mark every upload "Made for Kids". Comments stay off.',
-        'No jump cuts under two seconds, no sudden loud sounds, no flashing.',
-        'No peril, no villains, no character ever alone and frightened.',
-        'One idea per episode, named at the start and repeated at the end.',
-        'No product references, no calls to action beyond "watch the next story".',
-      ],
-    },
-    branding: {
-      accentColor: '#65a30d',
-      monogram: 'TT',
-      thumbnailStyle: 'One character, soft pastel background, huge rounded title, no text clutter.',
-      titleTypography: 'Rounded sans, very large, four words maximum.',
-      lowerThirdStyle: 'None. On-screen text is limited to the episode title card.',
-      musicDirection: 'Ukulele and glockenspiel, slow tempo, consistent theme every episode.',
-    },
-    voices: [
-      voice('vp_kid_narr_en', 'Storyteller (EN)', 'narrator', 'en', 'Gentle, sing-song, very slow pace.'),
-      voice('vp_kid_narr_hi', 'Storyteller (HI)', 'narrator', 'hi', 'Warm Hindi storytelling voice for a small child.'),
-      voice('vp_kid_tumble', 'Tumbletail the squirrel', 'character', 'en', 'Bright, curious, slightly breathless. The lead.'),
-      voice('vp_kid_boru', 'Boru the tortoise', 'character', 'en', 'Very slow, deep, kind. The calming counterweight.'),
-    ],
-    youtube: { state: 'not_connected', intendedHandle: '@TumbletailKidsTV', lastCheckedAt: null },
+    audience: 'Children aged 4–7. Talking-animal stories.',
   },
 ];
+
+function toChannel(seed: ChannelSeed): Channel {
+  const languages = seed.languages ?? ['en', 'hi'];
+  return {
+    id: seed.id,
+    slug: seed.slug,
+    name: seed.name,
+    niche: '',
+    description: '',
+    status: 'setup',
+    audienceRating: seed.audienceRating ?? 'general',
+    monetised: false,
+    timezone: 'Asia/Kolkata',
+    createdOn: '',
+    subscribers: 0,
+    config: {
+      audience: seed.audience ?? '',
+      tone: '',
+      languages,
+      primaryLanguage: seed.primaryLanguage ?? languages[0],
+      preferredFormats: [],
+      targetDurationMinutes: { min: 0, max: 0 },
+      cadence: { videosPerWeek: 0, publishDays: [], publishTime: '18:00' },
+      monthlyBudget: 0,
+      currency: 'INR',
+      approvedSources: [],
+      editorialRules: [],
+    },
+    branding: {
+      accentColor: seed.accentColor,
+      monogram: seed.monogram,
+      thumbnailStyle: '',
+      titleTypography: '',
+      lowerThirdStyle: '',
+      musicDirection: '',
+    },
+    voices: [],
+    youtube: { state: 'not_connected', intendedHandle: '', lastCheckedAt: null },
+  };
+}
+
+export const CHANNELS: Channel[] = SEEDS.map(toChannel);
 
 export const CHANNELS_BY_ID: Record<string, Channel> = Object.fromEntries(
   CHANNELS.map((channel) => [channel.id, channel]),
 );
+
+/** What still has to be decided before a channel is ready to produce for. */
+export function missingSetup(channel: Channel): string[] {
+  const missing: string[] = [];
+  if (!channel.config.audience.trim()) missing.push('audience');
+  if (!channel.config.tone.trim()) missing.push('tone');
+  if (channel.config.preferredFormats.length === 0) missing.push('formats');
+  if (channel.config.targetDurationMinutes.max === 0) missing.push('target duration');
+  if (channel.config.cadence.videosPerWeek === 0) missing.push('cadence');
+  if (channel.config.monthlyBudget === 0) missing.push('budget');
+  if (channel.config.approvedSources.length === 0) missing.push('approved sources');
+  return missing;
+}

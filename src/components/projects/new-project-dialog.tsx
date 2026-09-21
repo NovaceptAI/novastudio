@@ -26,7 +26,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { useData, useSnapshot } from '@/store/app-store';
-import { DEMO_TODAY, addDays } from '@/lib/date';
+import { addDays, today } from '@/lib/date';
 import { formatCurrency } from '@/lib/format';
 
 interface FormState {
@@ -48,16 +48,16 @@ type Errors = Partial<Record<keyof FormState, string>>;
 /** Stages a project can legitimately be created at. */
 const CREATABLE_STAGES: PipelineStage[] = ['idea', 'research', 'script'];
 
-function initialState(channelId: string): FormState {
+function initialState(channelId: string, languages: LanguageCode[] = ['en']): FormState {
   return {
     channelId,
     title: '',
     format: 'explainer',
-    languages: ['en'],
-    targetDurationMinutes: '9',
+    languages,
+    targetDurationMinutes: '10',
     priority: 'normal',
-    dueDate: addDays(DEMO_TODAY, 14),
-    estimatedCost: '18000',
+    dueDate: addDays(today(), 14),
+    estimatedCost: '0',
     stage: 'idea',
     hook: '',
     summary: '',
@@ -79,7 +79,10 @@ export function NewProjectDialog({
   const navigate = useNavigate();
 
   const fallbackChannelId = defaultChannelId ?? channels[0]?.id ?? '';
-  const [form, setForm] = useState<FormState>(() => initialState(fallbackChannelId));
+  const channelLanguages = (id: string) => channels.find((item) => item.id === id)?.config.languages;
+  const [form, setForm] = useState<FormState>(() =>
+    initialState(fallbackChannelId, channelLanguages(fallbackChannelId)),
+  );
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
 
@@ -100,17 +103,16 @@ export function NewProjectDialog({
       ...current,
       channelId,
       languages: next ? next.config.languages : current.languages,
-      format: next ? next.config.preferredFormats[0] : current.format,
-      targetDurationMinutes: next
-        ? String(
-            Math.round(
-              (next.config.targetDurationMinutes.min + next.config.targetDurationMinutes.max) / 2,
-            ),
-          )
-        : current.targetDurationMinutes,
-      estimatedCost: next
-        ? String(Math.round(next.config.monthlyBudget / (next.config.cadence.videosPerWeek * 4.33)))
-        : current.estimatedCost,
+      // Only pre-fill from settings the channel actually has.
+      format: next?.config.preferredFormats[0] ?? current.format,
+      targetDurationMinutes:
+        next && next.config.targetDurationMinutes.max
+          ? String(Math.round((next.config.targetDurationMinutes.min + next.config.targetDurationMinutes.max) / 2))
+          : current.targetDurationMinutes,
+      estimatedCost:
+        next && next.config.monthlyBudget && next.config.cadence.videosPerWeek
+          ? String(Math.round(next.config.monthlyBudget / (next.config.cadence.videosPerWeek * 4.33)))
+          : current.estimatedCost,
     }));
     setErrors({});
   }
@@ -142,7 +144,7 @@ export function NewProjectDialog({
     }
 
     if (!form.dueDate) next.dueDate = 'Pick a due date.';
-    else if (form.dueDate < DEMO_TODAY) next.dueDate = 'The due date is in the past.';
+    else if (form.dueDate < today()) next.dueDate = 'The due date is in the past.';
 
     return next;
   }
@@ -175,7 +177,7 @@ export function NewProjectDialog({
         description: 'Saved locally. Nothing was sent to YouTube or any production service.',
       });
       onOpenChange(false);
-      setForm(initialState(fallbackChannelId));
+      setForm(initialState(fallbackChannelId, channelLanguages(fallbackChannelId)));
       navigate(`/pipeline/${project.id}`);
     } catch (cause) {
       notify({
@@ -198,7 +200,13 @@ export function NewProjectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="contents">
+        {/*
+          noValidate: this form validates itself and shows the message next to the
+          field. Native validation would otherwise block submit without a word —
+          e.g. a cost derived from the channel budget that is not a multiple of
+          the input's step.
+        */}
+        <form onSubmit={submit} className="contents" noValidate>
           <DialogBody className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Channel" required error={errors.channelId}>
@@ -224,7 +232,10 @@ export function NewProjectDialog({
                     value={form.format}
                     onChange={(event) => set('format', event.target.value as VideoFormat)}
                   >
-                    {(channel?.config.preferredFormats ?? []).map((format) => (
+                    {(channel?.config.preferredFormats.length
+                      ? channel.config.preferredFormats
+                      : (Object.keys(VIDEO_FORMAT_LABELS) as VideoFormat[])
+                    ).map((format) => (
                       <option key={format} value={format}>
                         {VIDEO_FORMAT_LABELS[format]}
                       </option>

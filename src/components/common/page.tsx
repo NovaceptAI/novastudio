@@ -1,4 +1,4 @@
-import { FlaskConical } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function PageHeader({
@@ -23,11 +23,8 @@ export function PageHeader({
   );
 }
 
-/**
- * Says plainly that the numbers on screen are seeded, not measured. Used on
- * every screen that shows a metric.
- */
-export function DemoDataNotice({ children, className }: { children?: React.ReactNode; className?: string }) {
+/** A quiet one-line note above a screen's content. */
+export function Notice({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <p
       className={cn(
@@ -35,10 +32,8 @@ export function DemoDataNotice({ children, className }: { children?: React.React
         className,
       )}
     >
-      <FlaskConical className="mt-px size-3.5 shrink-0" aria-hidden />
-      <span>
-        {children ?? 'Demo data — these figures are locally seeded, not measured from YouTube.'}
-      </span>
+      <Info className="mt-px size-3.5 shrink-0" aria-hidden />
+      <span>{children}</span>
     </p>
   );
 }

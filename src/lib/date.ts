@@ -1,15 +1,10 @@
 import type { DateRange, IsoDate, Weekday } from '@/types';
 import { WEEKDAY_VALUES } from '@/types';
 
-/**
- * All demo data is anchored to this date rather than `new Date()` so the seeded
- * pipeline, calendar and analytics stay coherent with each other. Local edits
- * still use the real clock.
- */
-export const DEMO_TODAY: IsoDate = '2026-09-20';
 
+/** Today's date on the viewer's clock, as `YYYY-MM-DD`. */
 export function today(): IsoDate {
-  return DEMO_TODAY;
+  return toIsoDate(new Date());
 }
 
 export function toIsoDate(date: Date): IsoDate {
@@ -47,7 +42,7 @@ export function isWithinRange(value: IsoDate, range: DateRange): boolean {
   return date >= range.from && date <= range.to;
 }
 
-export function rangeOfLastDays(days: number, anchor: IsoDate = DEMO_TODAY): DateRange {
+export function rangeOfLastDays(days: number, anchor: IsoDate = today()): DateRange {
   return { from: addDays(anchor, -(days - 1)), to: anchor };
 }
 
@@ -134,8 +129,8 @@ export function formatRange(range: DateRange): string {
   return `${formatDayMonth(range.from)} – ${formatFullDate(range.to)}`;
 }
 
-/** "3 days ago" / "in 2 days", relative to the demo anchor date. */
-export function relativeToToday(value: IsoDate, anchor: IsoDate = DEMO_TODAY): string {
+/** "3 days ago" / "in 2 days", relative to today. */
+export function relativeToToday(value: IsoDate, anchor: IsoDate = today()): string {
   const days = diffInDays(anchor, value.slice(0, 10));
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
@@ -144,7 +139,7 @@ export function relativeToToday(value: IsoDate, anchor: IsoDate = DEMO_TODAY): s
   return `${Math.abs(days)} days ago`;
 }
 
-export function isOverdue(value: IsoDate, anchor: IsoDate = DEMO_TODAY): boolean {
+export function isOverdue(value: IsoDate, anchor: IsoDate = today()): boolean {
   return value.slice(0, 10) < anchor;
 }
 

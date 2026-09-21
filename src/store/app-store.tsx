@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import type {
+  Asset,
   Channel,
   ChannelConfig,
   ContentIdea,
@@ -18,9 +19,9 @@ import type {
   WorkspaceSettings,
 } from '@/types';
 import * as api from '@/services/api';
-import type { Snapshot } from '@/services/api';
+import type { PersistedState, Snapshot } from '@/services/api';
 import { persistedSavedAt } from '@/services/storage';
-import { DEMO_TODAY, rangeOfLastDays } from '@/lib/date';
+import { rangeOfLastDays, today } from '@/lib/date';
 
 /**
  * One provider holds the loaded snapshot and the mutations; a second holds the
@@ -36,7 +37,10 @@ interface DataContextValue {
   /** When local edits were last written to localStorage. */
   savedAt: string | null;
   reload: () => Promise<void>;
-  resetDemo: () => Promise<void>;
+  clearAll: () => Promise<void>;
+  importWorkspace: (data: PersistedState) => Promise<void>;
+  addAsset: (asset: Omit<Asset, 'id' | 'createdOn' | 'placeholder'>) => Promise<Asset>;
+  deleteAsset: (id: string) => Promise<void>;
   createProject: (input: NewProjectInput) => Promise<VideoProject>;
   updateProject: (id: string, patch: Partial<VideoProject>, message?: string) => Promise<VideoProject>;
   changeStage: (id: string, stage: PipelineStage) => Promise<VideoProject>;
@@ -64,7 +68,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setSnapshot(await api.fetchSnapshot());
       setSavedAt(persistedSavedAt());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The demo data could not be loaded.');
+      setError(cause instanceof Error ? cause.message : 'The workspace could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -96,15 +100,55 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       error,
       savedAt,
       reload: load,
-      resetDemo: async () => {
+      clearAll: async () => {
         setLoading(true);
         try {
-          setSnapshot(await api.resetDemoData());
+          setSnapshot(await api.clearAllData());
           setSavedAt(null);
           setError(null);
         } finally {
           setLoading(false);
         }
+      },
+      importWorkspace: async (data) => {
+        setSnapshot(await api.importWorkspace(data));
+        setSavedAt(persistedSavedAt());
+      },
+      addAsset: async (asset) => {
+        const created = await api.addAsset(asset);
+        setSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                assets: [created, ...current.assets],
+                projects: created.projectId
+                  ? current.projects.map((project) =>
+                      project.id === created.projectId
+                        ? { ...project, assetIds: [...project.assetIds, created.id] }
+                        : project,
+                    )
+                  : current.projects,
+              }
+            : current,
+        );
+        setSavedAt(persistedSavedAt());
+        return created;
+      },
+      deleteAsset: async (id) => {
+        await api.deleteAsset(id);
+        setSnapshot((current) =>
+          current
+            ? {
+                ...current,
+                assets: current.assets.filter((asset) => asset.id !== id),
+                projects: current.projects.map((project) => ({
+                  ...project,
+                  assetIds: project.assetIds.filter((assetId) => assetId !== id),
+                })),
+              }
+            : current,
+        );
+        setSavedAt(persistedSavedAt());
       },
       createProject: async (input) => {
         const project = await api.createProject(input);
@@ -129,7 +173,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteProject: async (id) => {
         await api.deleteProject(id);
         setSnapshot((current) =>
-          current ? { ...current, projects: current.projects.filter((item) => item.id !== id) } : current,
+          current
+            ? {
+                ...current,
+                projects: current.projects.filter((item) => item.id !== id),
+                assets: current.assets.map((asset) =>
+                  asset.projectId === id ? { ...asset, projectId: null } : asset,
+                ),
+              }
+            : current,
         );
         setSavedAt(persistedSavedAt());
       },
@@ -218,7 +270,7 @@ export function FiltersProvider({ children }: { children: React.ReactNode }) {
       setChannelId,
       rangeDays,
       setRangeDays,
-      range: rangeOfLastDays(rangeDays, DEMO_TODAY),
+      range: rangeOfLastDays(rangeDays, today()),
       search,
       setSearch,
     }),

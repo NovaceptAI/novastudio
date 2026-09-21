@@ -3,7 +3,6 @@ import type {
   Channel,
   ChannelConfig,
   ContentIdea,
-  DailyChannelMetrics,
   Integration,
   IsoDate,
   NewProjectInput,
@@ -11,15 +10,13 @@ import type {
   VideoProject,
   WorkspaceSettings,
 } from '@/types';
-import { buildDemoData, type DemoData } from '@/data';
-import { buildDailyMetrics } from '@/data/analytics';
-import { clearPersisted, readPersisted, writePersisted } from './storage';
-import { DEMO_TODAY, isoDateTime } from '@/lib/date';
+import { emptyWorkspace, type WorkspaceData } from '@/data';
+import { clearPersisted, dropLegacyStorage, readPersisted, writePersisted } from './storage';
+import { isoDateTime, today } from '@/lib/date';
 import { createId } from '@/lib/utils';
-import { CHANNELS_BY_ID } from '@/data/channels';
 
 /**
- * The mock service layer.
+ * The service layer.
  *
  * Every screen talks to this module and nothing else, so swapping it for real
  * HTTP calls is a change here and nowhere in the UI: each function already
@@ -28,8 +25,8 @@ import { CHANNELS_BY_ID } from '@/data/channels';
  * Until then, state lives in memory and is mirrored into localStorage.
  */
 
-/** What is persisted. Metrics are left out and regenerated from projects. */
-interface PersistedState {
+/** What is persisted, and what an export file contains. */
+export interface PersistedState {
   channels: Channel[];
   projects: VideoProject[];
   ideas: ContentIdea[];
@@ -37,32 +34,29 @@ interface PersistedState {
   settings: WorkspaceSettings;
 }
 
-let state: DemoData | null = null;
+let state: WorkspaceData | null = null;
 
 /** Stands in for network latency so loading states are real, not theoretical. */
 function latency<T>(value: T, ms = 140): Promise<T> {
   return new Promise((resolve) => window.setTimeout(() => resolve(value), ms));
 }
 
-function hydrate(): DemoData {
+function hydrate(): WorkspaceData {
   if (state) return state;
-  const demo = buildDemoData();
+  dropLegacyStorage();
+  const fresh = emptyWorkspace();
   const persisted = readPersisted<PersistedState>();
 
-  if (persisted) {
-    state = {
-      ...demo,
-      channels: persisted.channels ?? demo.channels,
-      projects: persisted.projects ?? demo.projects,
-      ideas: persisted.ideas ?? demo.ideas,
-      assets: persisted.assets ?? demo.assets,
-      settings: { ...demo.settings, ...persisted.settings },
-      // Regenerated so analytics always match the projects that are loaded.
-      metrics: buildDailyMetrics(persisted.projects ?? demo.projects),
-    };
-  } else {
-    state = demo;
-  }
+  state = persisted
+    ? {
+        ...fresh,
+        channels: persisted.channels ?? fresh.channels,
+        projects: persisted.projects ?? [],
+        ideas: persisted.ideas ?? [],
+        assets: persisted.assets ?? [],
+        settings: { ...fresh.settings, ...persisted.settings },
+      }
+    : fresh;
   return state;
 }
 
@@ -77,12 +71,6 @@ function persist(): void {
   });
 }
 
-/** Recomputes metrics after any change that moves a publish date. */
-function refreshMetrics(): void {
-  const current = hydrate();
-  current.metrics = buildDailyMetrics(current.projects);
-}
-
 /* ------------------------------------------------------------- snapshot */
 
 export interface Snapshot {
@@ -90,7 +78,6 @@ export interface Snapshot {
   projects: VideoProject[];
   ideas: ContentIdea[];
   assets: Asset[];
-  metrics: DailyChannelMetrics[];
   integrations: Integration[];
   settings: WorkspaceSettings;
 }
@@ -150,7 +137,6 @@ export async function updateProject(
   else updated = { ...updated, updatedAt: new Date().toISOString() };
 
   current.projects = current.projects.map((project) => (project.id === projectId ? updated : project));
-  if (patch.publishing) refreshMetrics();
   persist();
   return latency(updated);
 }
@@ -181,7 +167,7 @@ export async function changeStage(projectId: string, stage: PipelineStage): Prom
     }
   }
 
-  const channel = CHANNELS_BY_ID[project.channelId] ?? current.channels.find((c) => c.id === project.channelId);
+  const channel = current.channels.find((item) => item.id === project.channelId);
   const publishTime = channel?.config.cadence.publishTime ?? '18:00';
 
   const publishing = { ...project.publishing };
@@ -189,7 +175,7 @@ export async function changeStage(projectId: string, stage: PipelineStage): Prom
     publishing.scheduledFor = isoDateTime(project.dueDate, publishTime);
   }
   if (stage === 'published' && !publishing.publishedAt) {
-    publishing.publishedAt = isoDateTime(DEMO_TODAY, publishTime);
+    publishing.publishedAt = isoDateTime(today(), publishTime);
     publishing.scheduledFor = publishing.scheduledFor ?? publishing.publishedAt;
   }
   if (stage !== 'published') publishing.publishedAt = null;
@@ -207,7 +193,7 @@ export async function rescheduleProject(projectId: string, date: IsoDate): Promi
   const project = current.projects.find((item) => item.id === projectId);
   if (!project) throw new Error(`Project ${projectId} was not found`);
 
-  const channel = CHANNELS_BY_ID[project.channelId];
+  const channel = current.channels.find((item) => item.id === project.channelId);
   const time = channel?.config.cadence.publishTime ?? '18:00';
   const slot = isoDateTime(date, time);
   const published = project.stage === 'published';
@@ -302,7 +288,9 @@ export async function createProject(input: NewProjectInput): Promise<VideoProjec
 export async function deleteProject(projectId: string): Promise<void> {
   const current = hydrate();
   current.projects = current.projects.filter((project) => project.id !== projectId);
-  refreshMetrics();
+  current.assets = current.assets.map((asset) =>
+    asset.projectId === projectId ? { ...asset, projectId: null } : asset,
+  );
   persist();
   return latency(undefined);
 }
@@ -315,17 +303,20 @@ export async function promoteIdea(ideaId: string, dueDate: IsoDate): Promise<Vid
   if (!idea) throw new Error(`Idea ${ideaId} was not found`);
 
   const channel = current.channels.find((item) => item.id === idea.channelId)!;
+  const { min, max } = channel.config.targetDurationMinutes;
+  const perVideo =
+    channel.config.monthlyBudget && channel.config.cadence.videosPerWeek
+      ? Math.round(channel.config.monthlyBudget / (channel.config.cadence.videosPerWeek * 4.33))
+      : 0;
   const project = await createProject({
     channelId: idea.channelId,
     title: idea.title,
     format: idea.format,
     languages: idea.languages,
-    targetDurationMinutes: Math.round(
-      (channel.config.targetDurationMinutes.min + channel.config.targetDurationMinutes.max) / 2,
-    ),
+    targetDurationMinutes: max ? Math.round((min + max) / 2) : 10,
     priority: 'normal',
     dueDate,
-    estimatedCost: Math.round(channel.config.monthlyBudget / (channel.config.cadence.videosPerWeek * 4.33)),
+    estimatedCost: perVideo,
     stage: 'idea',
     hook: idea.angle,
     summary: idea.title,
@@ -338,7 +329,7 @@ export async function promoteIdea(ideaId: string, dueDate: IsoDate): Promise<Vid
 
 export async function addIdea(idea: Omit<ContentIdea, 'id' | 'createdOn'>): Promise<ContentIdea> {
   const current = hydrate();
-  const created: ContentIdea = { ...idea, id: createId('id'), createdOn: DEMO_TODAY };
+  const created: ContentIdea = { ...idea, id: createId('id'), createdOn: today() };
   current.ideas = [created, ...current.ideas];
   persist();
   return latency(created);
@@ -353,11 +344,69 @@ export async function updateSettings(patch: Partial<WorkspaceSettings>): Promise
   return latency(current.settings);
 }
 
-/* ------------------------------------------------------------------ demo */
+/* ---------------------------------------------------------------- assets */
 
-export async function resetDemoData(): Promise<Snapshot> {
+export async function addAsset(asset: Omit<Asset, 'id' | 'createdOn' | 'placeholder'>): Promise<Asset> {
+  const current = hydrate();
+  const created: Asset = { ...asset, id: createId('as'), createdOn: today(), placeholder: true };
+  current.assets = [created, ...current.assets];
+  if (created.projectId) {
+    current.projects = current.projects.map((project) =>
+      project.id === created.projectId
+        ? { ...project, assetIds: [...project.assetIds, created.id] }
+        : project,
+    );
+  }
+  persist();
+  return latency(created);
+}
+
+export async function deleteAsset(assetId: string): Promise<void> {
+  const current = hydrate();
+  current.assets = current.assets.filter((asset) => asset.id !== assetId);
+  current.projects = current.projects.map((project) => ({
+    ...project,
+    assetIds: project.assetIds.filter((id) => id !== assetId),
+  }));
+  persist();
+  return latency(undefined);
+}
+
+/* ------------------------------------------------------------ workspace */
+
+/** Everything a backup file needs to restore this workspace elsewhere. */
+export function exportWorkspace(): PersistedState {
+  const current = hydrate();
+  return {
+    channels: current.channels,
+    projects: current.projects,
+    ideas: current.ideas,
+    assets: current.assets,
+    settings: current.settings,
+  };
+}
+
+export async function importWorkspace(data: PersistedState): Promise<Snapshot> {
+  if (!Array.isArray(data?.channels) || !Array.isArray(data?.projects)) {
+    throw new Error('That file is not a NovaStudio export.');
+  }
+  const fresh = emptyWorkspace();
+  state = {
+    ...fresh,
+    channels: data.channels,
+    projects: data.projects,
+    ideas: data.ideas ?? [],
+    assets: data.assets ?? [],
+    settings: { ...fresh.settings, ...data.settings },
+  };
+  persist();
+  return latency({ ...state });
+}
+
+/** Deletes every video, idea, asset and setting, and restores blank channels. */
+export async function clearAllData(): Promise<Snapshot> {
   clearPersisted();
   state = null;
   const fresh = hydrate();
-  return latency({ ...fresh }, 260);
+  return latency({ ...fresh }, 200);
 }

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { AlertTriangle, Database, RotateCcw, Save, ShieldAlert } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { AlertTriangle, Download, HardDrive, Save, ShieldAlert, Trash2, Upload } from 'lucide-react';
 import { useData, useSnapshot } from '@/store/app-store';
 import {
   LANGUAGE_LABELS,
@@ -26,7 +26,8 @@ import {
   Switch,
   useToast,
 } from '@/components/ui';
-import { DemoDataNotice, PageHeader, Section } from '@/components/common';
+import { PageHeader, Section } from '@/components/common';
+import { exportWorkspace, type PersistedState } from '@/services/api';
 import { formatCurrency } from '@/lib/format';
 import { formatDateTime } from '@/lib/date';
 
@@ -63,7 +64,8 @@ function ToggleRow({
 
 export function SettingsPage() {
   const { settings, projects, assets, channels } = useSnapshot();
-  const { updateSettings, resetDemo, savedAt } = useData();
+  const { updateSettings, clearAll, importWorkspace, savedAt } = useData();
+  const fileRef = useRef<HTMLInputElement>(null);
   const { notify } = useToast();
 
   const [draft, setDraft] = useState<WorkspaceSettings>(settings);
@@ -108,15 +110,38 @@ export function SettingsPage() {
   async function doReset() {
     setResetting(true);
     try {
-      await resetDemo();
+      await clearAll();
       setResetOpen(false);
-      notify({
-        tone: 'success',
-        title: 'Demo data reset',
-        description: 'Every local edit has been discarded and the seeded workspace restored.',
-      });
+      notify({ tone: 'success', title: 'All data cleared', description: 'The workspace is back to ten blank channels.' });
     } finally {
       setResetting(false);
+    }
+  }
+
+  function download() {
+    const blob = new Blob([JSON.stringify(exportWorkspace(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `novastudio-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    notify({ tone: 'success', title: 'Backup downloaded' });
+  }
+
+  async function restore(file: File) {
+    try {
+      const data = JSON.parse(await file.text()) as PersistedState;
+      await importWorkspace(data);
+      notify({ tone: 'success', title: 'Backup restored', description: `${data.projects.length} videos loaded.` });
+    } catch (cause) {
+      notify({
+        tone: 'error',
+        title: 'Could not restore that file',
+        description: cause instanceof Error ? cause.message : 'It is not a valid NovaStudio backup.',
+      });
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
     }
   }
 
@@ -137,11 +162,6 @@ export function SettingsPage() {
           </div>
         }
       />
-
-      <DemoDataNotice>
-        Settings are stored in this browser's localStorage. They are not sent anywhere, and no API keys or
-        secrets are ever collected here.
-      </DemoDataNotice>
 
       <Section title="Workspace defaults" description="Applied to new projects and to how figures are shown.">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -307,52 +327,66 @@ export function SettingsPage() {
         </div>
       </Section>
 
-      <Section
-        title="Demo data"
-        description="Local edits live in this browser's localStorage and nowhere else."
-      >
-        <dl className="divide-y divide-border">
-          <div className="flex items-center justify-between gap-4 py-2">
-            <dt className="text-xs text-muted-foreground">Channels</dt>
-            <dd className="tabular text-sm">{channels.length}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <dt className="text-xs text-muted-foreground">Video projects</dt>
-            <dd className="tabular text-sm">{projects.length}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <dt className="text-xs text-muted-foreground">Assets</dt>
-            <dd className="tabular text-sm">{assets.length}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4 py-2">
-            <dt className="text-xs text-muted-foreground">Local edits last saved</dt>
-            <dd className="text-sm">{savedAt ? formatDateTime(savedAt) : 'No local edits yet'}</dd>
-          </div>
+      <Section title="Your data" description="Where the tracker's records live, and how to keep them safe.">
+        <div className="flex items-start gap-2.5 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2.5">
+          <HardDrive className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
+          <p className="text-xs leading-relaxed">
+            Everything is saved in <strong>this browser only</strong>. It is not shared with anyone else,
+            does not follow you to another device, and is lost if this browser's site data is cleared.
+            Download a backup regularly until NovaStudio has a server to save to.
+          </p>
+        </div>
+
+        <dl className="mt-3 divide-y divide-border">
+          {[
+            ['Channels', channels.length],
+            ['Videos', projects.length],
+            ['Assets', assets.length],
+            ['Last saved', savedAt ? formatDateTime(savedAt) : 'Nothing saved yet'],
+          ].map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between gap-4 py-2">
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+              <dd className="tabular text-sm">{value}</dd>
+            </div>
+          ))}
         </dl>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          <Button variant="danger" size="sm" onClick={() => setResetOpen(true)}>
-            <RotateCcw /> Reset demo data
+          <Button variant="secondary" size="sm" onClick={download}>
+            <Download /> Download backup
           </Button>
-          <span className="inline-flex items-center gap-1.5 text-2xs text-muted-foreground">
-            <Database className="size-3.5" aria-hidden />
-            Restores the seeded workspace and discards every local edit.
-          </span>
+          <Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>
+            <Upload /> Restore from backup
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            aria-label="Backup file to restore"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void restore(file);
+            }}
+          />
+          <Button variant="danger" size="sm" className="ml-auto" onClick={() => setResetOpen(true)}>
+            <Trash2 /> Clear all data
+          </Button>
         </div>
       </Section>
 
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reset demo data?</DialogTitle>
+            <DialogTitle>Clear all data?</DialogTitle>
             <DialogDescription>This cannot be undone.</DialogDescription>
           </DialogHeader>
           <DialogBody>
             <div className="flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2.5">
               <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" aria-hidden />
               <p className="text-xs leading-relaxed">
-                Every project you created, every edit to a channel, script, review or schedule, and all
-                settings changes will be discarded, and the seeded workspace restored.
+                Every video, idea and asset, all channel configuration and all settings will be deleted,
+                leaving ten blank channels. Download a backup first if you might want any of it back.
               </p>
             </div>
           </DialogBody>
@@ -361,7 +395,7 @@ export function SettingsPage() {
               Cancel
             </Button>
             <Button variant="danger" onClick={() => void doReset()} disabled={resetting}>
-              {resetting ? 'Resetting…' : 'Reset demo data'}
+              {resetting ? 'Clearing…' : 'Clear all data'}
             </Button>
           </DialogFooter>
         </DialogContent>

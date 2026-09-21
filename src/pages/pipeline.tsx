@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CircleSlash, KanbanSquare, Plus, Rows3, Search, X } from 'lucide-react';
 import { useData, useScopedChannelIds, useSnapshot } from '@/store/app-store';
 import {
@@ -33,7 +33,7 @@ import {
   Tr,
   useToast,
 } from '@/components/ui';
-import { ChannelAvatar, DemoDataNotice, LanguagePips, PageHeader, PriorityBadge, StageBadge } from '@/components/common';
+import { ChannelAvatar, LanguagePips, PageHeader, PriorityBadge, StageBadge, Notice } from '@/components/common';
 import { ProjectCard } from '@/components/projects/project-card';
 import { NewProjectDialog } from '@/components/projects/new-project-dialog';
 import { StageChangeError } from '@/services/api';
@@ -55,7 +55,10 @@ export function PipelinePage() {
   const { notify } = useToast();
   const scopedIds = useScopedChannelIds();
 
-  const [view, setView] = useState<ViewMode>('board');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const stageParam = searchParams.get('stage') as PipelineStage | null;
+  const stageFilter = stageParam && PIPELINE_STAGES.includes(stageParam) ? stageParam : null;
+  const [view, setView] = useState<ViewMode>(stageFilter ? 'table' : 'board');
   const [query, setQuery] = useState('');
   const [priority, setPriority] = useState<Priority | 'all'>('all');
   const [format, setFormat] = useState<VideoFormat | 'all'>('all');
@@ -63,13 +66,22 @@ export function PipelinePage() {
   const [impediment, setImpediment] = useState<Impediment>('all');
   const [dragged, setDragged] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<PipelineStage | null>(null);
-  const [newOpen, setNewOpen] = useState(false);
+  const [newOpen, setNewOpenState] = useState(searchParams.get('new') === '1');
+  function setNewOpen(open: boolean) {
+    setNewOpenState(open);
+    if (!open && searchParams.has('new')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+  }
 
   const scoped = useMemo(() => scopeProjects(projects, scopedIds), [projects, scopedIds]);
 
   const filtered = useMemo(
     () =>
       scoped.filter((project) => {
+        if (stageFilter && project.stage !== stageFilter) return false;
         if (priority !== 'all' && project.priority !== priority) return false;
         if (format !== 'all' && project.format !== format) return false;
         if (language !== 'all' && !project.languages.includes(language)) return false;
@@ -78,7 +90,7 @@ export function PipelinePage() {
         if (impediment === 'clear' && (project.blocker || project.failure)) return false;
         return matchesQuery(query, project.title, project.brief.summary, project.brief.hook);
       }),
-    [scoped, priority, format, language, impediment, query],
+    [scoped, stageFilter, priority, format, language, impediment, query],
   );
 
   const byStage = useMemo(() => {
@@ -98,6 +110,7 @@ export function PipelinePage() {
   const blockedProjects = blocked(filtered);
   const failedProjects = failed(filtered);
   const filtersActive =
+    stageFilter !== null ||
     query !== '' || priority !== 'all' || format !== 'all' || language !== 'all' || impediment !== 'all';
 
   async function moveTo(project: VideoProject, stage: PipelineStage) {
@@ -119,6 +132,7 @@ export function PipelinePage() {
   }
 
   function clearFilters() {
+    if (stageFilter) setSearchParams({}, { replace: true });
     setQuery('');
     setPriority('all');
     setFormat('all');
@@ -176,10 +190,10 @@ export function PipelinePage() {
         }
       />
 
-      <DemoDataNotice>
+      <Notice>
         Changing a stage updates this record only. It does not run research, write a script, generate
         audio or visuals, or publish anything.
-      </DemoDataNotice>
+      </Notice>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1 sm:max-w-xs">
@@ -239,6 +253,7 @@ export function PipelinePage() {
           <option value="failed">Failed jobs only</option>
           <option value="clear">No impediments</option>
         </NativeSelect>
+        {stageFilter && <Badge tone="accent">Stage: {STAGE_LABELS[stageFilter]}</Badge>}
         {filtersActive && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X /> Clear
@@ -274,11 +289,19 @@ export function PipelinePage() {
 
       {filtered.length === 0 ? (
         <div className="card-surface">
-          <EmptyState
-            title="No projects match those filters"
-            description="Widen the filters, or create a new video project."
-            action={{ label: 'Clear filters', onClick: clearFilters }}
-          />
+          {scoped.length === 0 ? (
+            <EmptyState
+              title="No videos yet"
+              description="Create a video project, or promote an idea from a channel's backlog."
+              action={{ label: 'New video', onClick: () => setNewOpen(true) }}
+            />
+          ) : (
+            <EmptyState
+              title="No projects match those filters"
+              description="Widen the filters, or create a new video project."
+              action={{ label: 'Clear filters', onClick: clearFilters }}
+            />
+          )}
         </div>
       ) : view === 'board' ? (
         <div className="scrollbar-thin -mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">

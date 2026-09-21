@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutGrid, Rows3, Search, Users } from 'lucide-react';
+import { LayoutGrid, Rows3, Search } from 'lucide-react';
 import { useSnapshot } from '@/store/app-store';
 import {
   Badge,
@@ -15,7 +15,7 @@ import {
   Th,
   Tr,
 } from '@/components/ui';
-import { ChannelAvatar, DemoDataNotice, PageHeader } from '@/components/common';
+import { ChannelAvatar, PageHeader } from '@/components/common';
 import {
   AUDIENCE_RATING_LABELS,
   CHANNEL_STATUS_LABELS,
@@ -24,9 +24,10 @@ import {
   WEEKDAY_LABELS,
   type ChannelStatus,
 } from '@/types';
-import { formatCompactInr, formatCompactNumber } from '@/lib/format';
+import { formatCompactInr } from '@/lib/format';
 import { cn, matchesQuery } from '@/lib/utils';
 import { useSortableTable } from '@/hooks/use-sortable-table';
+import { missingSetup } from '@/data/channels';
 import { inProduction, scopeProjects } from '@/lib/selectors';
 
 type ViewMode = 'grid' | 'table';
@@ -47,7 +48,7 @@ export function ChannelsPage() {
           name: channel.name,
           niche: channel.niche,
           status: channel.status,
-          subscribers: channel.subscribers,
+          setupDone: 7 - missingSetup(channel).length,
           queue: inProduction(channelProjects).length,
           backlog: channelProjects.filter((project) => project.stage !== 'published').length,
           budget: channel.config.monthlyBudget,
@@ -67,13 +68,13 @@ export function ChannelsPage() {
     [enriched, query, status],
   );
 
-  const { sorted, sortKey, direction, toggle } = useSortableTable(filtered, 'subscribers', 'desc');
+  const { sorted, sortKey, direction, toggle } = useSortableTable(filtered, 'name', 'asc');
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Channels"
-        description="Every channel in the network, its configuration and how much work it has in flight."
+        description="The ten channels, how far each one's setup has got, and how much work it has in flight."
         actions={
           <div className="flex items-center rounded-lg border border-border-strong bg-card p-0.5">
             <Button
@@ -95,11 +96,6 @@ export function ChannelsPage() {
           </div>
         }
       />
-
-      <DemoDataNotice>
-        Demo data — these are internal channel configurations. None of them is linked to a real YouTube
-        channel.
-      </DemoDataNotice>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1 sm:max-w-xs">
@@ -147,7 +143,7 @@ export function ChannelsPage() {
       ) : view === 'grid' ? (
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map(({ channel, queue }) => (
-            <li key={channel.id}>
+            <li key={channel.id} className="min-w-0">
               <Link
                 to={`/channels/${channel.slug}`}
                 className="card-surface flex h-full flex-col p-4 transition-shadow hover:shadow-pop"
@@ -156,16 +152,16 @@ export function ChannelsPage() {
                   <ChannelAvatar channel={channel} size="lg" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{channel.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{channel.niche}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {missingSetup(channel).length === 0
+                        ? 'Ready to produce'
+                        : `Setup: ${7 - missingSetup(channel).length} of 7 done`}
+                    </p>
                   </div>
                   <Badge tone={CHANNEL_STATUS_TONES[channel.status]}>
                     {CHANNEL_STATUS_LABELS[channel.status]}
                   </Badge>
                 </div>
-
-                <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                  {channel.description}
-                </p>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {channel.config.languages.map((language) => (
@@ -184,7 +180,9 @@ export function ChannelsPage() {
                 <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
                   <div>
                     <dt className="text-2xs text-muted-foreground">Cadence</dt>
-                    <dd className="tabular text-sm font-medium">{channel.config.cadence.videosPerWeek}/wk</dd>
+                    <dd className="tabular text-sm font-medium">
+                      {channel.config.cadence.videosPerWeek ? `${channel.config.cadence.videosPerWeek}/wk` : '—'}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-2xs text-muted-foreground">In production</dt>
@@ -193,15 +191,11 @@ export function ChannelsPage() {
                   <div>
                     <dt className="text-2xs text-muted-foreground">Budget</dt>
                     <dd className="tabular text-sm font-medium">
-                      {formatCompactInr(channel.config.monthlyBudget)}
+                      {channel.config.monthlyBudget ? formatCompactInr(channel.config.monthlyBudget) : '—'}
                     </dd>
                   </div>
                 </dl>
 
-                <p className="mt-3 flex items-center gap-1.5 text-2xs text-muted-foreground">
-                  <Users className="size-3.5" aria-hidden />
-                  {formatCompactNumber(channel.subscribers)} subscribers (demo)
-                </p>
               </Link>
             </li>
           ))}
@@ -215,7 +209,7 @@ export function ChannelsPage() {
                   <SortableTh active={sortKey === 'name'} direction={direction} onSort={() => toggle('name')}>
                     Channel
                   </SortableTh>
-                  <Th>Niche</Th>
+                  <Th>Setup</Th>
                   <Th>Languages</Th>
                   <Th>Status</Th>
                   <SortableTh active={sortKey === 'cadence'} direction={direction} onSort={() => toggle('cadence')} className="text-right">
@@ -241,7 +235,9 @@ export function ChannelsPage() {
                         <span className="truncate">{row.name}</span>
                       </Link>
                     </Td>
-                    <Td className="text-muted-foreground">{row.niche}</Td>
+                    <Td className="text-muted-foreground">
+                      {missingSetup(row.channel).length === 0 ? 'Ready' : `${7 - missingSetup(row.channel).length} of 7`}
+                    </Td>
                     <Td>
                       <span className="flex gap-1">
                         {row.channel.config.languages.map((language) => (
@@ -255,7 +251,7 @@ export function ChannelsPage() {
                       </Badge>
                     </Td>
                     <Td className="tabular text-right">
-                      <span className="block">{row.cadence}/week</span>
+                      <span className="block">{row.cadence ? `${row.cadence}/week` : 'Not set'}</span>
                       <span className={cn('block text-2xs text-muted-foreground')}>
                         {row.channel.config.cadence.publishDays
                           .map((day) => WEEKDAY_LABELS[day])
@@ -263,7 +259,7 @@ export function ChannelsPage() {
                       </span>
                     </Td>
                     <Td className="tabular text-right">{row.queue}</Td>
-                    <Td className="tabular text-right">{formatCompactInr(row.budget)}</Td>
+                    <Td className="tabular text-right">{row.budget ? formatCompactInr(row.budget) : 'Not set'}</Td>
                   </Tr>
                 ))}
               </tbody>

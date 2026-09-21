@@ -1,12 +1,14 @@
 import type {
   Channel,
   DateRange,
+  IsoDate,
   PipelineStage,
   VideoProject,
   WorkspaceSettings,
 } from '@/types';
-import { PIPELINE_STAGES, BLOCKER_REASON_LABELS } from '@/types';
-import { DEMO_TODAY, addDays, isOverdue, isWithinRange } from './date';
+import { PIPELINE_STAGES, BLOCKER_REASON_LABELS, STAGE_LABELS } from '@/types';
+import { missingSetup } from '@/data/channels';
+import { addDays, isOverdue, isWithinRange, today } from './date';
 import { sum } from './utils';
 
 export function scopeProjects(projects: VideoProject[], channelIds: string[]): VideoProject[] {
@@ -74,116 +76,173 @@ export interface UpcomingRelease {
 }
 
 export function upcomingReleases(projects: VideoProject[], days = 14): UpcomingRelease[] {
-  const until = addDays(DEMO_TODAY, days);
+  const until = addDays(today(), days);
   return projects
     .filter((project) => {
       const slot = project.publishing.scheduledFor;
-      return Boolean(slot) && slot!.slice(0, 10) >= DEMO_TODAY && slot!.slice(0, 10) <= until;
+      return Boolean(slot) && slot!.slice(0, 10) >= today() && slot!.slice(0, 10) <= until;
     })
     .map((project) => ({ project, slot: project.publishing.scheduledFor! }))
     .sort((a, b) => a.slot.localeCompare(b.slot));
 }
 
-export type AttentionSeverity = 'danger' | 'warning' | 'info';
+export type ActionKind =
+  | 'failed'
+  | 'blocked'
+  | 'overdue'
+  | 'review'
+  | 'due_soon'
+  | 'sources'
+  | 'setup'
+  | 'start';
 
-export interface AttentionItem {
+export interface NextAction {
   id: string;
-  severity: AttentionSeverity;
+  kind: ActionKind;
+  severity: 'danger' | 'warning' | 'info' | 'neutral';
   title: string;
   detail: string;
   to: string;
+  /** Lower sorts first. Ties break on due date. */
+  rank: number;
+  due?: IsoDate;
 }
 
+const RANK: Record<ActionKind, number> = {
+  failed: 0,
+  blocked: 1,
+  overdue: 2,
+  review: 3,
+  sources: 4,
+  due_soon: 5,
+  setup: 6,
+  start: 7,
+};
+
 /**
- * Everything a producer would want flagged on a Monday morning: failed jobs,
- * blockers, overdue work, unverified sources on projects close to scheduling,
- * channels publishing below their configured cadence, and budget pressure.
+ * The ordered to-do list behind the Overview: everything that needs a person,
+ * most urgent first. Built only from what is actually in the workspace — an
+ * empty workspace produces set-up tasks and nothing else.
  */
-export function attentionItems(
+export function nextActions(
   projects: VideoProject[],
   channels: Channel[],
   settings: WorkspaceSettings,
-  range: DateRange,
-): AttentionItem[] {
-  const items: AttentionItem[] = [];
-
-  for (const project of failed(projects)) {
-    items.push({
-      id: `failed-${project.id}`,
-      severity: 'danger',
-      title: `${project.failure!.step} job failed — ${project.title}`,
-      detail: `${project.failure!.message} (${project.failure!.attempts} attempts)`,
-      to: `/pipeline/${project.id}`,
-    });
-  }
-
-  for (const project of blocked(projects)) {
-    items.push({
-      id: `blocked-${project.id}`,
-      severity: 'warning',
-      title: `Blocked: ${BLOCKER_REASON_LABELS[project.blocker!.reason]}`,
-      detail: `${project.title} — since ${project.blocker!.since}`,
-      to: `/pipeline/${project.id}`,
-    });
-  }
+  dueSoonDays = 7,
+): NextAction[] {
+  const actions: NextAction[] = [];
+  const soon = addDays(today(), dueSoonDays);
+  const channelName = (id: string) => channels.find((channel) => channel.id === id)?.name ?? '';
 
   for (const project of projects) {
-    if (project.stage === 'published' || project.stage === 'scheduled') continue;
-    if (!isOverdue(project.dueDate)) continue;
-    items.push({
-      id: `overdue-${project.id}`,
-      severity: 'warning',
-      title: `Overdue — ${project.title}`,
-      detail: `Due ${project.dueDate}, still at ${project.stage}.`,
-      to: `/pipeline/${project.id}`,
-    });
-  }
+    const open = project.stage !== 'published';
+    const base = { to: `/pipeline/${project.id}`, due: project.dueDate };
 
-  if (settings.requireSourceVerification) {
-    for (const project of projects) {
-      if (project.stage !== 'review' && project.stage !== 'editing') continue;
-      const unverified = project.research.filter((record) => !record.verifiedOn).length;
-      if (unverified === 0) continue;
-      items.push({
-        id: `sources-${project.id}`,
-        severity: 'info',
-        title: `${unverified} unverified source${unverified > 1 ? 's' : ''} — ${project.title}`,
-        detail: 'Verification is required before this can be scheduled.',
-        to: `/pipeline/${project.id}`,
+    if (project.failure && settings.notifyOnFailedJob) {
+      actions.push({
+        ...base,
+        id: `failed-${project.id}`,
+        kind: 'failed',
+        severity: 'danger',
+        title: `Fix failed ${project.failure.step} step — ${project.title}`,
+        detail: project.failure.message,
+        rank: RANK.failed,
       });
+    }
+    if (project.blocker && settings.notifyOnBlocked) {
+      actions.push({
+        ...base,
+        id: `blocked-${project.id}`,
+        kind: 'blocked',
+        severity: 'warning',
+        title: `Unblock — ${project.title}`,
+        detail: `${BLOCKER_REASON_LABELS[project.blocker.reason]}: ${project.blocker.note}`,
+        rank: RANK.blocked,
+      });
+    }
+    if (!open || project.stage === 'scheduled') continue;
+
+    if (isOverdue(project.dueDate)) {
+      actions.push({
+        ...base,
+        id: `overdue-${project.id}`,
+        kind: 'overdue',
+        severity: 'danger',
+        title: `Overdue — ${project.title}`,
+        detail: `${channelName(project.channelId)} · due ${project.dueDate}, still at ${STAGE_LABELS[project.stage]}`,
+        rank: RANK.overdue,
+      });
+    } else if (project.stage === 'review') {
+      actions.push({
+        ...base,
+        id: `review-${project.id}`,
+        kind: 'review',
+        severity: 'warning',
+        title: `Review and sign off — ${project.title}`,
+        detail: `${channelName(project.channelId)} · due ${project.dueDate}`,
+        rank: RANK.review,
+      });
+    } else if (project.dueDate <= soon) {
+      actions.push({
+        ...base,
+        id: `soon-${project.id}`,
+        kind: 'due_soon',
+        severity: 'info',
+        title: `Move forward from ${STAGE_LABELS[project.stage]} — ${project.title}`,
+        detail: `${channelName(project.channelId)} · due ${project.dueDate}`,
+        rank: RANK.due_soon,
+      });
+    }
+
+    if (
+      settings.requireSourceVerification &&
+      (project.stage === 'editing' || project.stage === 'review')
+    ) {
+      const unverified = project.research.filter((record) => !record.verifiedOn).length;
+      if (unverified > 0) {
+        actions.push({
+          ...base,
+          id: `sources-${project.id}`,
+          kind: 'sources',
+          severity: 'warning',
+          title: `Verify ${unverified} source${unverified > 1 ? 's' : ''} — ${project.title}`,
+          detail: 'Required before this can be scheduled.',
+          rank: RANK.sources,
+        });
+      }
     }
   }
 
   for (const channel of channels) {
-    const channelProjects = projects.filter((project) => project.channelId === channel.id);
-    const published = publishedInRange(channelProjects, range).length;
-    const weeks = Math.max(1, Math.round((new Date(range.to).getTime() - new Date(range.from).getTime()) / 604800000));
-    const expected = channel.config.cadence.videosPerWeek * weeks;
-    if (channel.status === 'active' && published < expected * 0.6) {
-      items.push({
-        id: `cadence-${channel.id}`,
-        severity: 'info',
-        title: `${channel.name} is publishing below cadence`,
-        detail: `${published} published in this range against a plan of about ${expected}.`,
-        to: `/channels/${channel.slug}`,
-      });
-    }
-
-    const committed = committedSpend(channelProjects);
-    const threshold = (channel.config.monthlyBudget * settings.monthlyBudgetWarnPct) / 100;
-    if (committed > threshold) {
-      items.push({
-        id: `budget-${channel.id}`,
-        severity: 'warning',
-        title: `${channel.name} is near its monthly budget`,
-        detail: `Committed estimates are above ${settings.monthlyBudgetWarnPct}% of the configured budget.`,
-        to: `/channels/${channel.slug}`,
-      });
-    }
+    if (channel.status === 'archived' || channel.status === 'paused') continue;
+    const missing = missingSetup(channel);
+    if (missing.length === 0) continue;
+    actions.push({
+      id: `setup-${channel.id}`,
+      kind: 'setup',
+      severity: 'neutral',
+      title: `Set up ${channel.name}`,
+      detail: `Not set yet: ${missing.join(', ')}.`,
+      to: `/channels/${channel.slug}?tab=config`,
+      rank: RANK.setup,
+    });
   }
 
-  const order: Record<AttentionSeverity, number> = { danger: 0, warning: 1, info: 2 };
-  return items.sort((a, b) => order[a.severity] - order[b.severity]);
+  if (projects.length === 0) {
+    actions.push({
+      id: 'start',
+      kind: 'start',
+      severity: 'neutral',
+      title: 'Add your first video',
+      detail: 'Create a project, or add ideas to a channel backlog and promote one.',
+      to: '/pipeline?new=1',
+      rank: RANK.start,
+    });
+  }
+
+  return actions.sort(
+    (a, b) => a.rank - b.rank || (a.due ?? '9999').localeCompare(b.due ?? '9999'),
+  );
 }
 
 /** Most recently published first, for the channel detail page. */
